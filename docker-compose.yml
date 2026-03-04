@@ -55,6 +55,8 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
+    entrypoint: ["/docker-entrypoint.sh"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
     volumes:
@@ -63,6 +65,11 @@ services:
       - ./backend/exports:/app/exports
     environment:
       # Database
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
       # Redis
       REDIS_URL: redis://redis:6379/0
@@ -85,10 +92,16 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
-    command: celery -A app.workers.queue worker --loglevel=info
+    entrypoint: []
+    command: ["celery", "-A", "app.workers.queue", "worker", "--loglevel=info"]
     volumes:
       - ./backend:/app
     environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
       REDIS_URL: redis://redis:6379/0
       PYTHONUNBUFFERED: "1"
@@ -108,10 +121,16 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
-    command: celery -A app.workers.queue beat --loglevel=info
+    entrypoint: []
+    command: ["celery", "-A", "app.workers.queue", "beat", "--loglevel=info"]
     volumes:
       - ./backend:/app
     environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
       REDIS_URL: redis://redis:6379/0
       PYTHONUNBUFFERED: "1"
