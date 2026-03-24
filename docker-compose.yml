@@ -30,23 +30,6 @@ services:
       retries: 5
 
   # ==========================================
-  # REDIS - BROKER PARA CELERY
-  # ==========================================
-  redis:
-    container_name: scrapingweb_redis
-    image: redis:7-alpine
-    restart: always
-    ports:
-      - "6379:6379"
-    networks:
-      - scrapingweb_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ==========================================
   # BACKEND FASTAPI
   # ==========================================
   backend:
@@ -71,78 +54,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
-      # Redis
-      REDIS_URL: redis://redis:6379/0
       # Python
       PYTHONUNBUFFERED: "1"
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - scrapingweb_network
 
   # ==========================================
-  # CELERY WORKER - PROCESAMIENTO ASÍNCRONO
-  # ==========================================
-  celery_worker:
-    container_name: scrapingweb_celery_worker
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    restart: unless-stopped
-    entrypoint: []
-    command: ["celery", "-A", "app.workers.queue", "worker", "--loglevel=info"]
-    volumes:
-      - ./backend:/app
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
-      REDIS_URL: redis://redis:6379/0
-      PYTHONUNBUFFERED: "1"
-    depends_on:
-      - redis
-      - db
-      - backend
-    networks:
-      - scrapingweb_network
-
-  # ==========================================
-  # CELERY BEAT - SCHEDULER
-  # ==========================================
-  celery_beat:
-    container_name: scrapingweb_celery_beat
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    restart: unless-stopped
-    entrypoint: []
-    command: ["celery", "-A", "app.workers.queue", "beat", "--loglevel=info"]
-    volumes:
-      - ./backend:/app
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-scrapingweb}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
-      REDIS_URL: redis://redis:6379/0
-      PYTHONUNBUFFERED: "1"
-    depends_on:
-      - redis
-      - db
-      - backend
-    networks:
-      - scrapingweb_network
-
-  # ==========================================
-  # FRONTEND NEXT.JS
+  # FRONTEND VITE + REACT
   # ==========================================
   frontend:
     container_name: scrapingweb_frontend
@@ -150,10 +71,10 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://backend:8000
+        - VITE_API_BASE_URL=
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"
     volumes:
       # Código fuente montado para hot-reload
       - ./frontend/src:/app/src
@@ -161,7 +82,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      VITE_API_BASE_URL: ""
     depends_on:
       - backend
     networks:

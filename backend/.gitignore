@@ -1,80 +1,9 @@
-﻿# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
 *.pyd
-*.pdb
-*.egg-info/
-.eggs/
-dist/
-build/
-pip-wheel-metadata/
-.coverage
-htmlcov/
-.pytest_cache/
-pytestdebug.log
-
-# Envs
 .env
-.env.*.local
-*.env.local
 .venv/
 venv/
-ENV/
-env/
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# Logs & temp
-*.log
-*.tmp
-*.swp
-*.swo
-
-# MyPy / Ruff / Cache
+.pytest_cache/
 .mypy_cache/
-.dmypy.json
-.pyre/
-.pytype/
-.ruff_cache/
-
-# Alembic cache (mant├®n las migraciones .py, ignora compilados)
-alembic/__pycache__/
-alembic/versions/__pycache__/
-
-# Docker
-*.pid
-docker-compose.override.yml
-# Si generas archivos locales de bind-mount para pruebas:
-# /data/
-`
-
-# JSON GENERADO POR LA APP
-app/core/constants.json
-
-# ==========================================
-# ScrapingWeb Specific
-# ==========================================
-
-# Archivos de exportaci├│n generados
-exports/*.pdf
-exports/*.csv
-exports/*.xlsx
-
-# Archivos temporales de Selenium
-*.crdownload
-selenium-*.log
-geckodriver.log
-chromedriver.log
-
-# Datos de cach├® de NLP
-.spacy/
-nltk_data/
-
-# PostgreSQL data
-postgres_data/
-pgadmin_data/

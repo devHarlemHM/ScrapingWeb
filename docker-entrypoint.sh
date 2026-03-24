@@ -10,20 +10,17 @@ while ! pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POS
 done
 echo "✅ PostgreSQL listo"
 
-# Esperar a que Redis esté listo
-echo "⏳ Esperando Redis..."
-while ! redis-cli -h redis ping > /dev/null 2>&1; do
-  sleep 1
-done
-echo "✅ Redis listo"
-
 # Ejecutar migraciones
-echo "📦 Ejecutando migraciones Alembic..."
-alembic upgrade head
+if [ -f "alembic.ini" ]; then
+  echo "📦 Ejecutando migraciones Alembic..."
+  alembic upgrade head || true
+fi
 
 # Poblar datos iniciales (solo si no existen)
-echo "🌱 Poblando datos iniciales..."
-python -m app.seeds.initial_data || true
+if [ -f "app/seeds/initial_data.py" ]; then
+  echo "🌱 Poblando datos iniciales..."
+  python -m app.seeds.initial_data || true
+fi
 
 # Ejecutar comando
 echo "✅ Iniciando aplicación..."

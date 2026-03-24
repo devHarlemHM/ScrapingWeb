@@ -32,9 +32,8 @@ COPY backend/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Descargar modelos de spaCy y NLTK
-RUN python -m spacy download es_core_news_sm && \
-    python -c "import nltk; nltk.download('vader_lexicon'); nltk.download('punkt'); nltk.download('stopwords')"
+# Instalar navegador para Playwright
+RUN python -m playwright install chromium
 
 # Copiar código de la aplicación
 COPY backend/ .

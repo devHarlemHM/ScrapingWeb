@@ -1,85 +1,9 @@
-﻿# ==========================================
-# FastAPI y servidor ASGI
-# ==========================================
-fastapi==0.115.0
+﻿fastapi==0.115.0
 uvicorn[standard]==0.32.0
-python-multipart==0.0.12
-
-# ==========================================
-# Base de datos PostgreSQL
-# ==========================================
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
-alembic==1.14.0
-
-# ==========================================
-# Autenticaci├│n y seguridad
-# ==========================================
-passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
-pyjwt==2.10.1
-cryptography==43.0.3
-
-# ==========================================
-# Validaci├│n con Pydantic
-# ==========================================
-pydantic==2.9.2
 pydantic-settings==2.6.0
-email-validator==2.2.0
-
-# ==========================================
-# Celery (Background Jobs) y Redis
-# ==========================================
-celery==5.4.0
-redis==5.2.0
-flower==2.0.1
-
-# ==========================================
-# Web Scraping
-# ==========================================
-selenium==4.27.1
-beautifulsoup4==4.12.3
-lxml==5.3.0
-requests==2.32.3
-urllib3==2.2.3
-webdriver-manager==4.0.2
-
-# ==========================================
-# NLP (Procesamiento de Lenguaje Natural)
-# ==========================================
-spacy>=3.7.0,<4.0.0
-nltk==3.9.1
-textblob==0.18.0
-scikit-learn==1.6.0
-
-# ==========================================
-# Procesamiento y an├ílisis de datos
-# ==========================================
-# ==========================================
-# Exportaci├│n de reportes
-# ==========================================
-reportlab==4.2.5
-openpyxl==3.1.5
-fpdf2==2.8.1
-Pillow==11.0.0
-
-# ==========================================
-# Utilidades
-# ==========================================
-python-dateutil==2.9.0
-pytz==2024.2
 python-dotenv==1.0.1
-tenacity==9.0.0
-validators==0.34.0
-
-# ==========================================
-# Logging y monitoreo
-# ==========================================
-python-json-logger==3.2.1
-
-# ==========================================
-# Testing (opcional)
-# ==========================================
-pytest==8.3.4
-pytest-asyncio==0.24.0
-httpx==0.27.2
+apscheduler==3.10.4
+selenium==4.25.0
+playwright==1.47.0

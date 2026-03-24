@@ -1,38 +1,41 @@
-"""
-Configuración de SQLAlchemy y sesión de base de datos
-"""
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
-# Motor de base de datos
+
 engine = create_engine(
-    settings.DATABASE_URL,
+    settings.database_url,
     echo=settings.DEBUG,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20
 )
 
-# Sesión de base de datos
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db() -> Generator[Session, None, None]:
-    """
-    Dependencia de FastAPI para obtener sesión de BD
-    
-    Yields:
-        Session: Sesión de SQLAlchemy
-    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+def check_db_connection() -> bool:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    return True
+
+
+def ensure_runtime_schema() -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE hoteles
+                ADD COLUMN IF NOT EXISTS favorites_count INTEGER NOT NULL DEFAULT 0
+                """
+            )
+        )

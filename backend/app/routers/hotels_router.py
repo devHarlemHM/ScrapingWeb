@@ -1,97 +1,86 @@
-"""
-Router de Hoteles
-"""
-from typing import List
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.crud import crud_hotel
-from app.schemas.hotel import HotelCreate, HotelUpdate, HotelRead, HotelWithStats
-from app.schemas.base import ResponseBase
+from app.schemas.hotel import FavoriteUpdateIn, FavoriteUpdateOut, HotelDetailOut, HotelListItemOut, HotelReviewsOut
+from app.services.analytics_service import get_hotel_detail, get_hotel_reviews, list_hotels, update_hotel_favorite
 
-router = APIRouter()
-
-
-@router.get("/", response_model=List[HotelRead])
-def listar_hoteles(
-    skip: int = 0,
-    limit: int = 100,
-    activos_solo: bool = True,
-    db: Session = Depends(get_db)
-):
-    """Listar todos los hoteles"""
-    if activos_solo:
-        hoteles = crud_hotel.get_active(db, skip=skip, limit=limit)
-    else:
-        hoteles = crud_hotel.get_multi(db, skip=skip, limit=limit)
-    return hoteles
+router = APIRouter(prefix="/api/v1/hotels", tags=["Hoteles"])
 
 
-@router.get("/{hotel_id}", response_model=HotelRead)
-def obtener_hotel(hotel_id: UUID, db: Session = Depends(get_db)):
-    """Obtener un hotel por ID"""
-    hotel = crud_hotel.get(db, hotel_id)
-    if not hotel:
+@router.get("", response_model=list[HotelListItemOut])
+def hotels_list(
+    q: str | None = Query(default=None),
+    sort: str = Query(default="sentiment"),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    min_reviews: int | None = Query(default=None, ge=0),
+    min_price: float | None = Query(default=None),
+    max_price: float | None = Query(default=None),
+    min_rating: float | None = Query(default=None),
+    min_quality: float | None = Query(default=None),
+    min_sustainability: float | None = Query(default=None),
+    sentiment: str | None = Query(default=None),
+    platforms: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[HotelListItemOut]:
+    platform_list = [p.strip() for p in platforms.split(",")] if platforms else None
+
+    rows = list_hotels(
+        db=db,
+        query=q,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+        min_reviews=min_reviews,
+        min_price=min_price,
+        max_price=max_price,
+        min_rating=min_rating,
+        min_quality=min_quality,
+        min_sustainability=min_sustainability,
+        sentiment=sentiment,
+        platforms=platform_list,
+    )
+    return [HotelListItemOut(**row) for row in rows]
+
+
+@router.get("/{hotel_id}", response_model=HotelDetailOut)
+def hotel_detail(hotel_id: str, db: Session = Depends(get_db)) -> HotelDetailOut:
+    payload = get_hotel_detail(db, hotel_id)
+    if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
-    return hotel
+    return HotelDetailOut(**payload)
 
 
-@router.get("/{hotel_id}/stats", response_model=HotelWithStats)
-def obtener_hotel_con_estadisticas(hotel_id: UUID, db: Session = Depends(get_db)):
-    """Obtener hotel con estadásticas"""
-    result = crud_hotel.get_with_stats(db, hotel_id=hotel_id)
-    if not result:
+@router.get("/{hotel_id}/reviews", response_model=HotelReviewsOut)
+def hotel_reviews(
+    hotel_id: str,
+    platform: str | None = Query(default=None),
+    sentiment: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> HotelReviewsOut:
+    payload = get_hotel_reviews(
+        db=db,
+        hotel_id=hotel_id,
+        platform=platform,
+        sentiment=sentiment,
+        limit=limit,
+        offset=offset,
+    )
+    if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
-    
-    hotel_data = result["hotel"].__dict__.copy()
-    hotel_data["total_resenas"] = result["total_resenas"]
-    hotel_data["promedio_calificacion"] = result["promedio_calificacion"]
-    hotel_data["ultimo_scraping"] = result["ultimo_scraping"]
-    
-    return hotel_data
+    return HotelReviewsOut(**payload)
 
 
-@router.post("/", response_model=HotelRead, status_code=status.HTTP_201_CREATED)
-def crear_hotel(hotel_in: HotelCreate, db: Session = Depends(get_db)):
-    """Crear un nuevo hotel"""
-    # Verificar si ya existe
-    existing = crud_hotel.get_by_nombre(db, nombre=hotel_in.nombre)
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Ya existe un hotel con ese nombre"
-        )
-    
-    hotel = crud_hotel.create(db, obj_in=hotel_in)
-    return hotel
-
-
-@router.put("/{hotel_id}", response_model=HotelRead)
-def actualizar_hotel(
-    hotel_id: UUID,
-    hotel_in: HotelUpdate,
-    db: Session = Depends(get_db)
-):
-    """Actualizar un hotel"""
-    hotel = crud_hotel.get(db, hotel_id)
-    if not hotel:
+@router.post("/{hotel_id}/favorite", response_model=FavoriteUpdateOut)
+def hotel_favorite_update(
+    hotel_id: str,
+    body: FavoriteUpdateIn,
+    db: Session = Depends(get_db),
+) -> FavoriteUpdateOut:
+    payload = update_hotel_favorite(db=db, hotel_id=hotel_id, is_favorite=body.is_favorite)
+    if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
-    
-    hotel = crud_hotel.update(db, db_obj=hotel, obj_in=hotel_in)
-    return hotel
-
-
-@router.delete("/{hotel_id}", response_model=ResponseBase)
-def eliminar_hotel(hotel_id: UUID, db: Session = Depends(get_db)):
-    """Eliminar un hotel (soft delete)"""
-    hotel = crud_hotel.get(db, hotel_id)
-    if not hotel:
-        raise HTTPException(status_code=404, detail="Hotel no encontrado")
-    
-    # Soft delete
-    crud_hotel.update(db, db_obj=hotel, obj_in={"activo": False})
-    
-    return ResponseBase(message="Hotel eliminado correctamente")
+    return FavoriteUpdateOut(**payload)

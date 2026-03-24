@@ -1,53 +1,74 @@
-"""
-Schemas para Hotel
-"""
 from datetime import datetime
-from typing import Optional, List
-from uuid import UUID
 
-from pydantic import BaseModel, Field, EmailStr
-
-from app.schemas.base import BaseSchema, TimestampSchema
+from pydantic import BaseModel
 
 
-class HotelBase(BaseSchema):
-    """Schema base de Hotel"""
-    nombre: str = Field(..., min_length=1, max_length=255)
-    direccion: Optional[str] = Field(None, max_length=500)
-    ciudad: Optional[str] = Field(None, max_length=100)
-    telefono: Optional[str] = Field(None, max_length=50)
-    email: Optional[EmailStr] = None
-    sitio_web: Optional[str] = None
-    latitud: Optional[float] = Field(None, ge=-90, le=90)
-    longitud: Optional[float] = Field(None, ge=-180, le=180)
-    activo: bool = True
+class PlatformRatings(BaseModel):
+    google: float | None = None
+    booking: float | None = None
+    airbnb: float | None = None
 
 
-class HotelCreate(HotelBase):
-    """Schema para crear Hotel"""
-    pass
+class PlatformLinks(BaseModel):
+    google: str | None = None
+    booking: str | None = None
+    airbnb: str | None = None
 
 
-class HotelUpdate(BaseSchema):
-    """Schema para actualizar Hotel"""
-    nombre: Optional[str] = Field(None, min_length=1, max_length=255)
-    direccion: Optional[str] = Field(None, max_length=500)
-    ciudad: Optional[str] = Field(None, max_length=100)
-    telefono: Optional[str] = Field(None, max_length=50)
-    email: Optional[EmailStr] = None
-    sitio_web: Optional[str] = None
-    latitud: Optional[float] = Field(None, ge=-90, le=90)
-    longitud: Optional[float] = Field(None, ge=-180, le=180)
-    activo: Optional[bool] = None
+class SentimentsOut(BaseModel):
+    positive: int
+    neutral: int
+    negative: int
 
 
-class HotelRead(HotelBase, TimestampSchema):
-    """Schema para leer Hotel"""
-    id: UUID
-    
-    
-class HotelWithStats(HotelRead):
-    """Hotel con estadásticas"""
-    total_resenas: int = 0
-    promedio_calificacion: Optional[float] = None
-    ultimo_scraping: Optional[datetime] = None
+class HotelListItemOut(BaseModel):
+    id: str
+    name: str
+    location: str | None = None
+    city: str
+    country: str
+    rating: float | None = None
+    price_per_night: float | None = None
+    total_reviews: int
+    sentiment_score: float
+    quality_score: float | None = None
+    sustainability_score: float | None = None
+    favorites_count: int = 0
+    platforms: PlatformRatings
+    platform_links: PlatformLinks | None = None
+    sentiments: SentimentsOut
+    features: list[str]
+    description: str | None = None
+    highlight_review: str | None = None
+    image_url: str | None = None
+
+
+class ReviewOut(BaseModel):
+    id: str
+    author: str | None = None
+    platform: str
+    rating: float | None = None
+    date: datetime | None = None
+    text: str | None = None
+    sentiment: str | None = None
+    positive_text: str | None = None
+    negative_text: str | None = None
+
+
+class HotelDetailOut(HotelListItemOut):
+    recent_reviews: list[ReviewOut]
+
+
+class HotelReviewsOut(BaseModel):
+    hotel_id: str
+    total: int
+    reviews: list[ReviewOut]
+
+
+class FavoriteUpdateIn(BaseModel):
+    is_favorite: bool
+
+
+class FavoriteUpdateOut(BaseModel):
+    hotel_id: str
+    favorites_count: int
