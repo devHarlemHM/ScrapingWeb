@@ -12,54 +12,40 @@ interface UseHotelsResultsInput {
   ratingFilter: RatingFilterValue;
   platformFilter: PlatformFilterValue;
   minReviewsFilter: MinReviewsFilterValue;
-  sortBy: string;
 }
 
 const PAGE_SIZE = 10;
 
-function mapSort(sortBy: string): string {
-  const normalized = sortBy.toLowerCase();
-  if (normalized === 'best-rated') return 'rating';
-  if (normalized === 'most-reviewed') return 'reviews';
-  if (normalized === 'favorites') return 'favorites';
-  if (normalized === 'quality') return 'quality';
-  if (normalized === 'eco') return 'sustainability';
-  if (normalized === 'analyzed') return 'reviews';
-  return normalized;
-}
-
 function buildFilters(input: UseHotelsResultsInput): HotelFilters {
   const query = input.searchParams.get('q') ?? '';
+  const ratingFromParams = input.searchParams.get('rating') ?? input.searchParams.get('min_rating');
+  const sentimentFromParams = (input.searchParams.get('sentiment') ?? '').toLowerCase();
   const platforms = (input.searchParams.get('platforms') ?? '')
     .split(',')
     .map((value) => value.trim())
+    .map((value) => value.toLowerCase())
     .filter(Boolean);
-
-  const qualityFromParams = input.searchParams.get('quality');
-  const sustainabilityFromParams = input.searchParams.get('sustainability');
 
   const filters: HotelFilters = {
     query,
-    sort: mapSort(input.sortBy || input.searchParams.get('sort') || 'reviews'),
+    // Always rank hotels with more reviews first.
+    sort: 'reviews',
     platforms: input.platformFilter === 'all' ? platforms : [input.platformFilter],
   };
 
   if (input.ratingFilter !== 'all') {
     filters.minRating = Number(input.ratingFilter);
+  } else if (ratingFromParams) {
+    const value = Number(ratingFromParams);
+    if (!Number.isNaN(value)) filters.minRating = value;
   }
 
   if (input.minReviewsFilter !== 'all') {
     filters.minReviews = Number(input.minReviewsFilter);
   }
 
-  if (qualityFromParams) {
-    const value = Number(qualityFromParams);
-    if (!Number.isNaN(value)) filters.minQuality = value;
-  }
-
-  if (sustainabilityFromParams) {
-    const value = Number(sustainabilityFromParams);
-    if (!Number.isNaN(value)) filters.minSustainability = value;
+  if (sentimentFromParams && ['positive', 'neutral', 'negative'].includes(sentimentFromParams)) {
+    filters.sentiment = sentimentFromParams;
   }
 
   return filters;
@@ -89,7 +75,7 @@ export function useHotelsResults(input: UseHotelsResultsInput) {
       ...input,
       searchParams: new URLSearchParams(debouncedSearchKey),
     });
-  }, [debouncedSearchKey, input.ratingFilter, input.platformFilter, input.minReviewsFilter, input.sortBy]);
+  }, [debouncedSearchKey, input.ratingFilter, input.platformFilter, input.minReviewsFilter]);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 

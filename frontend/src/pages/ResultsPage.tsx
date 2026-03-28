@@ -13,7 +13,6 @@ import {
   Heart,
   Send,
   ExternalLink,
-  Award,
 } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import * as Popover from '@radix-ui/react-popover';
@@ -65,7 +64,6 @@ export function ResultsPage() {
   );
   const [platformFilter, setPlatformFilter] = useState<'all' | 'google' | 'booking' | 'airbnb'>('all');
   const [minReviewsFilter, setMinReviewsFilter] = useState<'all' | '50' | '100' | '200'>('all');
-  const [sortBy, setSortBy] = useState<string>(searchParams.get('sort') ?? 'reviews');
   const [favoritedHotels, setFavoritedHotels] = useState<Set<string>>(new Set());
   const [favoriteCounts, setFavoriteCounts] = useState<Record<string, number>>({});
   const [togglingFavoriteIds, setTogglingFavoriteIds] = useState<Set<string>>(new Set());
@@ -76,7 +74,6 @@ export function ResultsPage() {
     ratingFilter,
     platformFilter,
     minReviewsFilter,
-    sortBy,
   });
 
   useEffect(() => {
@@ -85,7 +82,6 @@ export function ResultsPage() {
       return;
     }
 
-    setSortBy('reviews');
     setRatingFilter('5');
   }, [hasSearchQuery]);
 
@@ -197,7 +193,7 @@ export function ResultsPage() {
                   className="overflow-hidden"
                 >
                   <div className="pt-4 mt-4 border-t border-gray-200 dark:border-slate-700">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div>
                         <label className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-2">
                           <Star className="w-4 h-4" />
@@ -251,21 +247,6 @@ export function ResultsPage() {
                         </select>
                       </div>
 
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                          <Award className="w-4 h-4" />
-                          Ordenar por
-                        </label>
-                        <select
-                          value={sortBy}
-                          onChange={(e) => setSortBy(e.target.value)}
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
-                        >
-                          <option value="rating">Mejor calificado</option>
-                          <option value="favorites">Mas favoritos</option>
-                          <option value="reviews">Mas resenado</option>
-                        </select>
-                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -344,7 +325,6 @@ export function ResultsPage() {
                             {hotel.location}, {hotel.city}
                           </span>
                         </div>
-                        {hotel.description && <p className="text-gray-600 dark:text-slate-400 mb-3">{hotel.description}</p>}
                         {hotel.highlightReview && (
                           <p className="text-sm italic text-gray-500 dark:text-slate-400 mb-2">"{hotel.highlightReview}"</p>
                         )}

@@ -170,6 +170,7 @@ function buildHotelsQuery(filters: HotelFilters): string {
 
   if (filters.query) params.set('q', filters.query);
   if (filters.sort) params.set('sort', filters.sort);
+  if (filters.sentiment) params.set('sentiment', filters.sentiment);
   if (filters.minReviews !== undefined) params.set('min_reviews', filters.minReviews.toString());
   if (filters.minRating !== undefined) params.set('min_rating', filters.minRating.toString());
   if (filters.minQuality !== undefined) params.set('min_quality', filters.minQuality.toString());

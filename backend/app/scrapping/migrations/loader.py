@@ -87,6 +87,44 @@ def _normalize_text(value: str | None) -> str:
     return (value or "").strip().lower()
 
 
+_GENERIC_HOTEL_DESCRIPTIONS = {
+    "hotel importado desde scrapping json",
+    "hotel importado desde scraping json",
+    "hotel importado de scrapping json",
+    "hotel importado de scraping json",
+}
+
+
+def _normalize_description(value: str) -> str:
+    return " ".join(
+        "".join(char.lower() for char in token if char.isalnum())
+        for token in value.split()
+    ).strip()
+
+
+def _is_generic_hotel_description(value: str | None) -> bool:
+    if not value:
+        return False
+    return _normalize_description(value) in _GENERIC_HOTEL_DESCRIPTIONS
+
+
+def _extract_hotel_description(review: ReviewInput) -> str | None:
+    if isinstance(review.payload, dict):
+        for key in ("descripcion", "description", "descripcion_alojamiento", "about", "summary"):
+            candidate = review.payload.get(key)
+            if isinstance(candidate, str):
+                text = candidate.strip()
+                if len(text) >= 25 and not _is_generic_hotel_description(text):
+                    return text[:280]
+
+    if review.review_text:
+        text = review.review_text.strip()
+        if len(text) >= 35:
+            return text[:220]
+
+    return None
+
+
 def _parse_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -312,7 +350,12 @@ def _seed_sources(db: Session) -> dict[str, Fuente]:
 def _upsert_hotel(db: Session, cache: dict[str, Hotel], review: ReviewInput) -> Hotel:
     key = _normalize_text(review.hotel_name)
     if key in cache:
-        return cache[key]
+        cached = cache[key]
+        if (not cached.descripcion or _is_generic_hotel_description(cached.descripcion)):
+            enriched_description = _extract_hotel_description(review)
+            if enriched_description:
+                cached.descripcion = enriched_description
+        return cached
 
     hotel = Hotel(
         nombre=review.hotel_name,
@@ -320,7 +363,7 @@ def _upsert_hotel(db: Session, cache: dict[str, Hotel], review: ReviewInput) -> 
         ciudad="Barranquilla",
         pais="Colombia",
         url=review.hotel_url,
-        descripcion="Hotel importado desde scrapping JSON.",
+        descripcion=_extract_hotel_description(review),
         precio_noche=None,
         image_url=None,
         features_json=[],

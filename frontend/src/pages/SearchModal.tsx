@@ -82,15 +82,12 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [dateTo, setDateTo] = useState<Date>(new Date(2024, 11, 31));
   const [selectedPeriod, setSelectedPeriod] = useState('6 months');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Google', 'Booking', 'Airbnb']);
-  const [selectedSentiment, setSelectedSentiment] = useState<string[]>([]);
-  const [minQuality, setMinQuality] = useState<number>(3);
-  const [minSustainability, setMinSustainability] = useState<number>(0);
-  const [sortBy, setSortBy] = useState('Quality');
+  const [selectedSentiment, setSelectedSentiment] = useState<string | null>(null);
+  const [minRating, setMinRating] = useState<number>(1);
 
   const platforms = ['Google', 'Booking', 'Airbnb'];
   const sentiments = ['Positive', 'Neutral', 'Negative'];
   const periods = ['30 days', '6 months', '12 months'];
-  const sortOptions = ['Quality', 'Eco', 'Reviews'];
 
   const togglePlatform = (platform: string) => {
     setSelectedPlatforms(prev => 
@@ -99,20 +96,23 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   };
 
   const toggleSentiment = (sentiment: string) => {
-    setSelectedSentiment(prev =>
-      prev.includes(sentiment) ? prev.filter(s => s !== sentiment) : [...prev, sentiment]
-    );
+    setSelectedSentiment((prev) => (prev === sentiment ? null : sentiment));
   };
 
   const handleSearch = () => {
-    const params = new URLSearchParams({
-      q: searchQuery,
-      platforms: selectedPlatforms.join(','),
-      sentiment: selectedSentiment.join(','),
-      quality: minQuality.toString(),
-      sustainability: minSustainability.toString(),
-      sort: sortBy,
-    });
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    if (selectedPlatforms.length > 0) {
+      params.set(
+        'platforms',
+        selectedPlatforms.map((platform) => platform.toLowerCase()).join(','),
+      );
+    }
+    if (selectedSentiment) {
+      params.set('sentiment', selectedSentiment.toLowerCase());
+    }
+    params.set('rating', minRating.toString());
+
     navigate(`/results?${params.toString()}`);
     onClose();
   };
@@ -148,7 +148,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
             </div>
 
             <Dialog.Description className="sr-only">
-              Busca hoteles con filtros avanzados por fecha, plataforma, sentimiento, calidad y sostenibilidad.
+              Busca hoteles con filtros avanzados por fecha, plataforma, sentimiento y calificacion minima.
             </Dialog.Description>
 
             {/* Search Input */}
@@ -288,7 +288,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                       key={sentiment}
                       onClick={() => toggleSentiment(sentiment)}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                        selectedSentiment.includes(sentiment)
+                        selectedSentiment === sentiment
                           ? sentiment === 'Positive'
                             ? 'bg-green-100 text-green-700 border-2 border-green-300'
                             : sentiment === 'Neutral'
@@ -304,22 +304,22 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               </div>
             </div>
 
-            {/* Quality & Sustainability */}
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            {/* Rating */}
+            <div className="mb-6">
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Calidad Mín.</span>
+                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Calificacion Min. (1-5)</span>
                 </div>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
-                      onClick={() => setMinQuality(star)}
+                      onClick={() => setMinRating(star)}
                       className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
-                        star === minQuality
+                        star === minRating
                           ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300 scale-110'
-                          : star < minQuality
+                          : star < minRating
                           ? 'bg-yellow-50 text-yellow-600 border-2 border-yellow-200'
                           : 'bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-slate-500 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
                       }`}
@@ -328,53 +328,6 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Sostenibilidad Mín.</span>
-                </div>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => setMinSustainability(star)}
-                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
-                        star === minSustainability
-                          ? 'bg-green-100 text-green-700 border-2 border-green-300 scale-110'
-                          : star < minSustainability
-                          ? 'bg-green-50 text-green-600 border-2 border-green-200'
-                          : 'bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-slate-500 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
-                      }`}
-                    >
-                      {star}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Sort By */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 rounded-full bg-purple-400"></div>
-                <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Ordenar Por</span>
-              </div>
-              <div className="flex gap-2">
-                {sortOptions.map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => setSortBy(option)}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
-                      sortBy === option
-                        ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                        : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
               </div>
             </div>
 

@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/v1/hotels", tags=["Hoteles"])
 @router.get("", response_model=list[HotelListItemOut])
 def hotels_list(
     q: str | None = Query(default=None),
-    sort: str = Query(default="sentiment"),
+    sort: str = Query(default="reviews"),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     min_reviews: int | None = Query(default=None, ge=0),

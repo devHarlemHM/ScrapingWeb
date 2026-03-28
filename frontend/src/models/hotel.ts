@@ -62,6 +62,7 @@ export interface HotelReviewsResponse {
 export interface HotelFilters {
   query?: string;
   sort?: string;
+  sentiment?: string;
   minReviews?: number;
   minRating?: number;
   minQuality?: number;

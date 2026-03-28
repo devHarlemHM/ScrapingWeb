@@ -52,6 +52,27 @@ STOPWORDS = {
     "noche",
 }
 
+_GENERIC_HOTEL_DESCRIPTIONS = {
+    "hotel importado desde scrapping json",
+    "hotel importado desde scraping json",
+    "hotel importado de scrapping json",
+    "hotel importado de scraping json",
+}
+
+
+def _normalize_description(value: str) -> str:
+    return " ".join(
+        "".join(char.lower() for char in token if char.isalnum())
+        for token in value.split()
+    ).strip()
+
+
+def _is_generic_hotel_description(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = _normalize_description(value)
+    return normalized in _GENERIC_HOTEL_DESCRIPTIONS
+
 
 def get_dashboard_summary(db: Session) -> dict[str, Any]:
     total_reviews = db.query(func.count(Resena.id)).scalar() or 0
@@ -189,7 +210,7 @@ def _review_texts_for_hotels(db: Session, hotel_ids: list[Any], per_hotel_limit:
 
 
 def _fallback_description(hotel: Hotel, review_texts: list[str]) -> str:
-    if hotel.descripcion and hotel.descripcion.strip():
+    if hotel.descripcion and hotel.descripcion.strip() and not _is_generic_hotel_description(hotel.descripcion):
         return hotel.descripcion.strip()
     if review_texts:
         first = review_texts[0][:220].strip()
@@ -290,7 +311,7 @@ def _build_hotel_payload(db: Session, hotel: Hotel) -> dict[str, Any]:
         "platforms": _platform_payload(rating_rows),
         "sentiments": sentiments,
         "features": hotel.features_json or [],
-        "description": hotel.descripcion,
+        "description": None if _is_generic_hotel_description(hotel.descripcion) else hotel.descripcion,
         "image_url": hotel.image_url,
     }
 
