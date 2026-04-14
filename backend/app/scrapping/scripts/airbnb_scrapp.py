@@ -1,7 +1,17 @@
 from urllib.parse import urlparse
+import os
 from playwright.sync_api import sync_playwright
 import time
 import json
+from datetime import datetime
+from time import perf_counter
+
+
+def log(message):
+    print(f"[AIRBNB][{datetime.now().strftime('%H:%M:%S')}] {message}", flush=True)
+
+
+SAVE_PROGRESS_JSON = os.getenv("AIRBNB_SAVE_PROGRESS_JSON", "false").lower() == "true"
 
 
 def cerrar_modal(page):
@@ -810,6 +820,8 @@ def extraer_reseñas_alojamiento(page):
 
 # Programa principal
 with sync_playwright() as p:
+    script_started = perf_counter()
+    log("Iniciando scraper de Airbnb")
     browser = p.chromium.launch(
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
@@ -835,7 +847,8 @@ with sync_playwright() as p:
     pagina = 1
 
     while True:  # Sin límite de páginas
-        print(f"\n📄 Procesando página {pagina}...")
+        page_started = perf_counter()
+        log(f"Procesando pagina {pagina}")
 
         try:
             page.wait_for_selector("a[href*='/rooms/']", timeout=15000)
@@ -856,7 +869,7 @@ with sync_playwright() as p:
                 if ruta not in hrefs:
                     hrefs.append(ruta)
 
-        print(f"Se encontraron {len(hrefs)} alojamientos únicos en esta página.")
+        log(f"Alojamientos unicos detectados en pagina {pagina}: {len(hrefs)}")
 
         # Procesar todos los alojamientos
         hrefs_a_procesar = hrefs
@@ -864,8 +877,8 @@ with sync_playwright() as p:
         # Visitar cada alojamiento
         for idx, path in enumerate(hrefs_a_procesar, start=1):
             url_completa = "https://www.airbnb.com.co" + path
-            print(f"\n🏠 Procesando alojamiento {idx}/{len(hrefs_a_procesar)} de la página {pagina}")
-            print(f"🔗 URL: {url_completa}")
+            log(f"Alojamiento {idx}/{len(hrefs_a_procesar)} de pagina {pagina}")
+            log(f"URL alojamiento: {url_completa}")
 
             try:
                 cerrar_modal(page)
@@ -913,11 +926,14 @@ with sync_playwright() as p:
 
                 print(f"✅ Extraídas {len(reseñas_alojamiento)} reseñas del alojamiento")
                 print(f"📊 Total acumulado: {len(todas_las_reseñas)} reseñas")
+                log(
+                    f"Resumen alojamiento {idx}/{len(hrefs_a_procesar)}: extraidas={len(reseñas_alojamiento)}, acumulado={len(todas_las_reseñas)}"
+                )
 
                 # Guardar progreso cada 5 alojamientos (más frecuente)
-                if idx % 5 == 0:
+                if SAVE_PROGRESS_JSON and idx % 5 == 0:
                     guardar_progreso(todas_las_reseñas, pagina)
-                    print(f"💾 Progreso guardado automáticamente - Total: {len(todas_las_reseñas)} reseñas")
+                    log(f"Progreso guardado automatico en pagina {pagina}: total={len(todas_las_reseñas)}")
 
                 # Volver a la lista
                 page.go_back(timeout=10000)
@@ -927,6 +943,9 @@ with sync_playwright() as p:
             except Exception as e:
                 print(f"❌ Error procesando alojamiento {idx}: {e}")
                 continue
+
+        page_elapsed = round(perf_counter() - page_started, 2)
+        log(f"Pagina {pagina} procesada en {page_elapsed}s | acumulado reseñas={len(todas_las_reseñas)}")
 
         # Ir a siguiente página - VERSIÓN MEJORADA
         try:
@@ -1129,12 +1148,14 @@ with sync_playwright() as p:
             break
 
 # Guardar resultado final
-print(f"\n Scraping completado!")
-print(f"📊 Total de reseñas extraídas: {len(todas_las_reseñas)}")
+log("Scraping completado")
+log(f"Total de reseñas extraidas: {len(todas_las_reseñas)}")
 
 # Guardar resultado final
 filename_final = 'reseñas_airbnb_barranquilla_final.json'
 with open(filename_final, 'w', encoding='utf-8') as f:
     json.dump(todas_las_reseñas, f, ensure_ascii=False, indent=2)
 
-print(f"💾 Resultado final guardado en: {filename_final}")
+total_elapsed = round(perf_counter() - script_started, 2)
+log(f"Resultado final guardado en: {filename_final}")
+log(f"Duracion total del script: {total_elapsed}s")

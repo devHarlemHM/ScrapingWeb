@@ -38,6 +38,95 @@ _MONTHS = {
     "diciembre": 12,
 }
 
+POSITIVE_HINTS = {
+    "excelente",
+    "limpio",
+    "comod",
+    "recomend",
+    "amable",
+    "agradable",
+    "perfect",
+    "genial",
+    "espectacular",
+    "tranquil",
+    "segur",
+    "hermos",
+    "encant",
+    "atent",
+    "buena",
+    "bien",
+}
+
+NEGATIVE_HINTS = {
+    "malo",
+    "sucio",
+    "ruido",
+    "demora",
+    "caro",
+    "peor",
+    "horrible",
+    "incomod",
+    "deficient",
+    "insegur",
+    "problema",
+    "fatal",
+    "mal",
+    "nunca",
+    "cancel",
+}
+
+NEGATION_TOKENS = {
+    "no",
+    "nunca",
+    "jamas",
+    "sin",
+    "ni",
+    "tampoco",
+}
+
+CONTRAST_TOKENS = {
+    "pero",
+    "aunque",
+    "sinembargo",
+}
+
+PLATFORM_RATING_THRESHOLDS = {
+    "google": (4.3, 2.3),
+    "booking": (4.1, 2.4),
+    "airbnb": (4.4, 2.5),
+}
+
+HOST_REPLY_MARKERS = {
+    "respuesta del anfitri",
+    "respuesta del alojamiento",
+    "respuesta de",
+    "host response",
+    "owner response",
+    "los esperamos",
+    "esperamos nuevamente",
+}
+
+HOST_REPLY_STARTS = (
+    "gracias",
+    "estimado",
+    "estimada",
+    "mil gracias",
+    "nos alegra",
+    "me alegra",
+    "lamentamos",
+    "esperamos",
+    "atentamente",
+    "cordialmente",
+)
+
+HOST_REPLY_AUTHOR_MARKERS = (
+    "respuesta de",
+    "host response",
+    "owner response",
+    "anfitri",
+    "propietario",
+)
+
 
 @dataclass(slots=True)
 class ReviewInput:
@@ -188,14 +277,203 @@ def _parse_date(raw: Any) -> datetime | None:
     return None
 
 
-def _sentiment_from_rating(rating_5: float | None) -> str:
-    if rating_5 is None:
+def _normalize_token(token: str) -> str:
+    return "".join(ch.lower() for ch in token if ch.isalnum())
+
+
+def _tokenize(text: str) -> list[str]:
+    return [_normalize_token(part) for part in text.split() if _normalize_token(part)]
+
+
+def _token_matches_hint(token: str, hint: str) -> bool:
+    if len(hint) <= 3:
+        return token == hint
+    return token.startswith(hint)
+
+
+def _token_label(token: str) -> int:
+    if any(_token_matches_hint(token, hint) for hint in POSITIVE_HINTS):
+        return 1
+    if any(_token_matches_hint(token, hint) for hint in NEGATIVE_HINTS):
+        return -1
+    return 0
+
+
+def _clause_score(tokens: list[str]) -> tuple[float, int, int]:
+    score = 0.0
+    positive_hits = 0
+    negative_hits = 0
+
+    for idx, token in enumerate(tokens):
+        label = _token_label(token)
+        if label == 0:
+            continue
+
+        negated = any(prev in NEGATION_TOKENS for prev in tokens[max(0, idx - 3) : idx])
+        if negated:
+            label *= -1
+
+        score += float(label)
+        if label > 0:
+            positive_hits += 1
+        else:
+            negative_hits += 1
+
+    return score, positive_hits, negative_hits
+
+
+def _split_by_contrast(tokens: list[str]) -> list[list[str]]:
+    segments: list[list[str]] = []
+    current: list[str] = []
+
+    for token in tokens:
+        if token in CONTRAST_TOKENS:
+            if current:
+                segments.append(current)
+                current = []
+            continue
+        current.append(token)
+
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _text_score(text: str) -> tuple[float, int, int]:
+    tokens = _tokenize(text)
+    if not tokens:
+        return 0.0, 0, 0
+
+    segments = _split_by_contrast(tokens)
+    if not segments:
+        return _clause_score(tokens)
+
+    total_score = 0.0
+    total_positive_hits = 0
+    total_negative_hits = 0
+
+    for idx, segment in enumerate(segments):
+        score, pos_hits, neg_hits = _clause_score(segment)
+        weight = 1.0
+        # In Spanish reviews, sentiment after "pero/aunque" usually dominates.
+        if idx == len(segments) - 1 and len(segments) > 1:
+            weight = 1.6
+
+        total_score += score * weight
+        total_positive_hits += pos_hits
+        total_negative_hits += neg_hits
+
+    return total_score, total_positive_hits, total_negative_hits
+
+
+def _is_host_reply_text(text: str | None) -> bool:
+    if not text:
+        return False
+
+    lower_text = text.strip().lower()
+    if not lower_text:
+        return False
+
+    if any(marker in lower_text for marker in HOST_REPLY_MARKERS):
+        return True
+    if lower_text.startswith(HOST_REPLY_STARTS):
+        if len(lower_text) <= 220:
+            return True
+        if "esperamos" in lower_text or "volver" in lower_text or "nuevamente" in lower_text:
+            return True
+    return False
+
+
+def _is_host_reply_author(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = value.strip().lower()
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in HOST_REPLY_AUTHOR_MARKERS)
+
+
+def _merged_review_text(item: ReviewInput) -> str | None:
+    candidates = [item.review_text, item.positive_text, item.negative_text]
+    merged = " ".join([(value or "").strip() for value in candidates if value and value.strip()]).strip()
+    if not merged:
+        return None
+    if merged.lower() == "n/a":
+        return None
+    return merged
+
+
+def _sentiment_from_review(item: ReviewInput) -> str:
+    text_value = _merged_review_text(item)
+
+    if _is_host_reply_author(item.author) or _is_host_reply_author(item.title) or _is_host_reply_text(text_value):
         return "neutral"
-    if rating_5 >= 4.2:
-        return "positive"
-    if rating_5 >= 3.0:
+
+    text_bias: str | None = None
+    lexical_score = 0.0
+    positive_hits = 0
+    negative_hits = 0
+
+    booking_positive = bool((item.positive_text or "").strip()) and (item.positive_text or "").strip().lower() != "n/a"
+    booking_negative = bool((item.negative_text or "").strip()) and (item.negative_text or "").strip().lower() != "n/a"
+
+    if item.source_code.lower() == "booking":
+        if booking_positive and not booking_negative:
+            lexical_score += 1.5
+            positive_hits += 1
+        elif booking_negative and not booking_positive:
+            lexical_score -= 1.5
+            negative_hits += 1
+
+    if text_value:
+        text_score, text_positive_hits, text_negative_hits = _text_score(text_value)
+        lexical_score += text_score
+        positive_hits += text_positive_hits
+        negative_hits += text_negative_hits
+        diff = positive_hits - negative_hits
+
+        if lexical_score >= 2.0:
+            return "positive"
+        if lexical_score <= -2.0:
+            return "negative"
+
+        if diff >= 2:
+            return "positive"
+        if diff <= -2:
+            return "negative"
+
+        if positive_hits > negative_hits and positive_hits >= 1:
+            text_bias = "positive"
+        elif negative_hits > positive_hits and negative_hits >= 1:
+            text_bias = "negative"
+
+    valid_rating: float | None = None
+    if item.rating_score_5 is not None and item.rating_score_5 > 0:
+        valid_rating = item.rating_score_5
+
+    if valid_rating is not None:
+        source_code = item.source_code.lower()
+        positive_threshold, negative_threshold = PLATFORM_RATING_THRESHOLDS.get(source_code, (4.2, 2.4))
+
+        if valid_rating >= positive_threshold and text_bias != "negative":
+            return "positive"
+        if valid_rating <= negative_threshold and text_bias != "positive":
+            return "negative"
+
+        # Keep lexical signal if present when rating is ambiguous.
+        if lexical_score >= 1.0:
+            return "positive"
+        if lexical_score <= -1.0:
+            return "negative"
+
+        if text_bias:
+            return text_bias
         return "neutral"
-    return "negative"
+
+    if text_bias:
+        return text_bias
+
+    return "neutral"
 
 
 def _hash_review(source: str, hotel_name: str, author: str | None, date_raw: str | None, text: str) -> str:
@@ -446,7 +724,7 @@ def migrate_json_to_db(db: Session, run_id: UUID) -> dict[str, int]:
             fecha_raw=item.date_raw,
             fecha_publicacion=item.date_value,
             tipo_estadia=item.stay_type,
-            sentimiento=_sentiment_from_rating(item.rating_score_5),
+            sentimiento=_sentiment_from_review(item),
             payload_json=item.payload,
             hash_unico=hash_value,
         )

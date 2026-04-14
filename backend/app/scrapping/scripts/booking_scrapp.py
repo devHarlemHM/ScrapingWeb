@@ -1,4 +1,5 @@
-from time import sleep
+from time import sleep, perf_counter
+from datetime import datetime
 import json
 import os
 from selenium import webdriver
@@ -8,6 +9,12 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 #Script realizado por Freddy Rangel
+
+
+def log(message):
+    print(f"[BOOKING][{datetime.now().strftime('%H:%M:%S')}] {message}", flush=True)
+
+
 opts = Options()
 opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 opts.add_argument("--no-sandbox")
@@ -26,7 +33,8 @@ wait = WebDriverWait(driver, 12)
 comentarios = []
 
 try:
-    print("🏨 EXTRACTOR BOOKING - BARRANQUILLA")
+    script_started = perf_counter()
+    log("EXTRACTOR BOOKING - BARRANQUILLA")
 
     # Abrir Booking
     driver.get("https://www.booking.com")
@@ -39,7 +47,7 @@ try:
     except:
         pass
 
-    print("🔍 Buscando Barranquilla...")
+    log("Buscando Barranquilla...")
     search = wait.until(EC.presence_of_element_located((By.NAME, "ss")))
     search.clear()
     search.send_keys("Barranquilla, Atlántico, Colombia")
@@ -47,7 +55,7 @@ try:
     search.send_keys(Keys.ENTER)
     sleep(5)
 
-    print(f"📍 Ubicación actual: {driver.title}")
+    log(f"Ubicacion actual: {driver.title}")
 
     # Scroll infinito hasta que no carguen más hoteles
     last_height = driver.execute_script("return document.body.scrollHeight")
@@ -64,7 +72,7 @@ try:
     hoteles_info = []
     hoteles_elementos = driver.find_elements(By.CSS_SELECTOR, "[data-testid='title']")
     total_hoteles = len(hoteles_elementos)
-    print(f"📊 {total_hoteles} hoteles encontrados")
+    log(f"Hoteles encontrados: {total_hoteles}")
 
     for hotel in hoteles_elementos:  
         try:
@@ -75,14 +83,15 @@ try:
         except:
             continue
 
-    print(f"📋 {len(hoteles_info)} hoteles añadidos")
+    log(f"Hoteles agregados para procesar: {len(hoteles_info)}")
 
     # Procesar hoteles
     for i, hotel_data in enumerate(hoteles_info, 1):
+        hotel_started = perf_counter()
         nombre = hotel_data["nombre"]
         url = hotel_data["url"]
 
-        print(f"\n🏨 [{i}/{len(hoteles_info)}] {nombre}")
+        log(f"Procesando hotel {i}/{len(hoteles_info)}: {nombre}")
 
         try:
             driver.get(url)
@@ -94,9 +103,9 @@ try:
                     'button[data-testid="fr-read-all-reviews"], a[data-testid="reviews-tab"], a[href*="reviews"]')
                 driver.execute_script("arguments[0].click();", comentarios_btn)
                 sleep(3)
-                print("  ✅ Comentarios abiertos")
+                log(f"Comentarios abiertos para hotel: {nombre}")
             except:
-                print("  ⚠️ No se encontró botón de comentarios, buscando en página actual")
+                log(f"No se encontro boton de comentarios para {nombre}, se extrae desde pagina actual")
 
             # Extraer comentarios con navegación por páginas
             count = 0
@@ -104,7 +113,7 @@ try:
             max_paginas = 10  # Límite de páginas para evitar bucles infinitos
             #Este bucle "while" puede ser quitado  solo lo utilicé para ver la funcionalidad del programa
             while pagina_actual <= max_paginas:
-                print(f"  📄 Procesando página {pagina_actual}...")
+                log(f"Hotel {nombre}: procesando pagina {pagina_actual}")
                 
                 # Extraer comentarios de la página actual
                 elementos = driver.find_elements(By.CSS_SELECTOR, 'div[data-testid="review-card"]')
@@ -156,7 +165,7 @@ try:
                         continue
 
                 count += comentarios_pagina
-                print(f"    ✅ {comentarios_pagina} comentarios extraídos de página {pagina_actual}")
+                log(f"Hotel {nombre}: {comentarios_pagina} comentarios en pagina {pagina_actual}")
                 
                 # Buscar y hacer clic en el botón de siguiente página
                 try:
@@ -250,10 +259,11 @@ try:
                     print(f"    ⚠️ Error navegando a página {pagina_actual + 1}: {str(e)[:50]}...")
                     break
 
-            print(f"  ✅ {count} comentarios extraídos en total de {pagina_actual} páginas")
+            hotel_elapsed = round(perf_counter() - hotel_started, 2)
+            log(f"Hotel {nombre}: total extraidos={count}, paginas={pagina_actual}, duracion={hotel_elapsed}s")
 
         except Exception as e:
-            print(f"  ❌ Error procesando hotel: {str(e)[:60]}...")
+            log(f"Error procesando hotel {nombre}: {str(e)[:60]}...")
             continue
 
         # Preguntar si quiere continuar con el siguiente hotel
@@ -276,11 +286,13 @@ try:
 
     with open('datos_completos.json', 'w', encoding='utf-8') as f:
         json.dump(datos, f, ensure_ascii=False, indent=2)
+    log(f"Archivo generado: datos_completos.json | comentarios={len(comentarios)}")
 
-    print(f"\n🎉 COMPLETADO!")
-    print(f"🏨 Hoteles procesados: {len(hoteles_info)}")
-    print(f"💬 Comentarios extraídos: {len(comentarios)}")
-    print(f"📄 Guardado en: datos.json")
+    total_elapsed = round(perf_counter() - script_started, 2)
+    log("Scraping booking completado")
+    log(f"Hoteles procesados: {len(hoteles_info)}")
+    log(f"Comentarios extraidos: {len(comentarios)}")
+    log(f"Duracion total: {total_elapsed}s")
 
     if comentarios:
         print("\n📋 EJEMPLO DE COMENTARIOS:")
@@ -293,7 +305,7 @@ try:
     if comentarios:
         with open('datos.json', 'w', encoding='utf-8') as f:
             json.dump({"comentarios_parciales": comentarios}, f, ensure_ascii=False, indent=2)
-        print(f"💾 {len(comentarios)} comentarios parciales guardados")
+        log(f"Archivo generado: datos.json | comentarios_parciales={len(comentarios)}")
 
 finally:
     try:

@@ -17,7 +17,6 @@ import {
   Line,
 } from 'recharts';
 
-import { monthlySentimentTrend, sentimentTopics } from '../models/analytics';
 import { useHotelDetails } from '../hooks/useHotelDetails';
 import { ImageWithFallback } from '../share/ImageWithFallback';
 
@@ -35,7 +34,7 @@ const COLORS = ['#10b981', '#a78bfa', '#fb923c'];
 export function HotelDetailsPage() {
   const { id } = useParams();
   const uid = useId().replace(/:/g, '-');
-  const { hotel, recentReviews, isLoading, error } = useHotelDetails(id);
+  const { hotel, analytics, recentReviews, isLoading, error } = useHotelDetails(id);
 
   if (isLoading) {
     return (
@@ -58,10 +57,17 @@ export function HotelDetailsPage() {
   const hotelImage = hotel.imageUrl || hotelImages[imageIndex % hotelImages.length];
 
   const sentimentData = [
-    { name: 'Positivo', value: hotel.sentiments.positive, color: COLORS[0] },
-    { name: 'Neutral', value: hotel.sentiments.neutral, color: COLORS[1] },
-    { name: 'Negativo', value: hotel.sentiments.negative, color: COLORS[2] },
+    { name: 'Positivo', value: analytics?.sentimentPercentages.positive ?? 0, count: analytics?.sentiments.positive ?? 0, color: COLORS[0] },
+    { name: 'Neutral', value: analytics?.sentimentPercentages.neutral ?? 0, count: analytics?.sentiments.neutral ?? 0, color: COLORS[1] },
+    { name: 'Negativo', value: analytics?.sentimentPercentages.negative ?? 0, count: analytics?.sentiments.negative ?? 0, color: COLORS[2] },
   ];
+
+  const trendData = (analytics?.trend6m ?? []).map((point) => ({
+    month: point.month.slice(5),
+    sentiment: point.positivePct,
+  }));
+
+  const topicData = analytics?.topics ?? [];
 
   const platformNames = {
     google: 'Google Reviews',
@@ -174,10 +180,10 @@ export function HotelDetailsPage() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-600 mb-4 text-center">Tendencia (ultimos 6 meses)</h3>
                   <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={monthlySentimentTrend} id={`details-line-${uid}`}>
+                    <LineChart data={trendData} id={`details-line-${uid}`}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                      <YAxis domain={[80, 100]} tick={{ fontSize: 12 }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
                       <Tooltip />
                       <Line type="monotone" dataKey="sentiment" stroke="#8b5cf6" strokeWidth={3} dot={{ fill: '#8b5cf6', r: 4 }} />
                     </LineChart>
@@ -185,15 +191,30 @@ export function HotelDetailsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-3 mb-8">
+                <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-center">
+                  <p className="text-xs text-green-700">Positivas</p>
+                  <p className="text-lg font-bold text-green-800">{analytics?.sentiments.positive ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-purple-200 bg-purple-50 p-3 text-center">
+                  <p className="text-xs text-purple-700">Neutras</p>
+                  <p className="text-lg font-bold text-purple-800">{analytics?.sentiments.neutral ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-center">
+                  <p className="text-xs text-orange-700">Negativas</p>
+                  <p className="text-lg font-bold text-orange-800">{analytics?.sentiments.negative ?? 0}</p>
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-sm font-medium text-gray-600 mb-4">Analisis por Temas</h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={sentimentTopics} layout="vertical" id={`details-bar-${uid}`}>
+                  <BarChart data={topicData} layout="vertical" id={`details-bar-${uid}`}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis type="number" domain={[0, 100]} />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <YAxis dataKey="topic" type="category" width={120} tick={{ fontSize: 12 }} />
                     <Tooltip />
-                    <Bar dataKey="positive" fill="#10b981" radius={[0, 8, 8, 0]} />
+                    <Bar dataKey="positivePct" fill="#10b981" radius={[0, 8, 8, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

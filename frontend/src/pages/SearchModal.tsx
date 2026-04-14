@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { endOfMonth, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'motion/react';
@@ -75,43 +75,62 @@ interface SearchModalProps {
 
 export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
   const [showFromCalendar, setShowFromCalendar] = useState(false);
   const [showToCalendar, setShowToCalendar] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date(2024, 0, 1));
-  const [dateTo, setDateTo] = useState<Date>(new Date(2024, 11, 31));
-  const [selectedPeriod, setSelectedPeriod] = useState('6 months');
+  const [dateTo, setDateTo] = useState<Date>(new Date());
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Google', 'Booking', 'Airbnb']);
-  const [selectedSentiment, setSelectedSentiment] = useState<string | null>(null);
-  const [minRating, setMinRating] = useState<number>(1);
+  const [selectedSentiment, setSelectedSentiment] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all');
+  const [ratingStar, setRatingStar] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<'reviews' | 'rating-desc' | 'rating-asc'>('reviews');
 
   const platforms = ['Google', 'Booking', 'Airbnb'];
-  const sentiments = ['Positive', 'Neutral', 'Negative'];
-  const periods = ['30 days', '6 months', '12 months'];
+  const sentiments: Array<{ label: string; value: 'all' | 'positive' | 'neutral' | 'negative' }> = [
+    { label: 'Todos', value: 'all' },
+    { label: 'Positivo', value: 'positive' },
+    { label: 'Neutral', value: 'neutral' },
+    { label: 'Negativo', value: 'negative' },
+  ];
+
+  const sortOptions: Array<{ label: string; value: 'reviews' | 'rating-desc' | 'rating-asc' }> = [
+    { label: 'Mas resenas', value: 'reviews' },
+    { label: 'Mayor a menor calificacion', value: 'rating-desc' },
+    { label: 'Menor a mayor calificacion', value: 'rating-asc' },
+  ];
 
   const togglePlatform = (platform: string) => {
-    setSelectedPlatforms(prev => 
-      prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
-    );
-  };
-
-  const toggleSentiment = (sentiment: string) => {
-    setSelectedSentiment((prev) => (prev === sentiment ? null : sentiment));
+    setSelectedPlatforms((prev) => {
+      if (prev.includes(platform)) {
+        if (prev.length === 1) {
+          return prev;
+        }
+        return prev.filter((p) => p !== platform);
+      }
+      return [...prev, platform];
+    });
   };
 
   const handleSearch = () => {
+    const normalizedFrom = dateFrom <= dateTo ? dateFrom : dateTo;
+    const normalizedTo = dateTo >= dateFrom ? dateTo : dateFrom;
+
     const params = new URLSearchParams();
-    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    params.set('advanced', '1');
     if (selectedPlatforms.length > 0) {
       params.set(
         'platforms',
         selectedPlatforms.map((platform) => platform.toLowerCase()).join(','),
       );
     }
-    if (selectedSentiment) {
-      params.set('sentiment', selectedSentiment.toLowerCase());
+    if (selectedSentiment !== 'all') {
+      params.set('sentiment', selectedSentiment);
     }
-    params.set('rating', minRating.toString());
+    if (ratingStar !== null) {
+      params.set('rating_star', ratingStar.toString());
+    }
+    params.set('sort', sortOrder);
+    params.set('date_from', format(normalizedFrom, 'yyyy-MM-01'));
+    params.set('date_to', format(endOfMonth(normalizedTo), 'yyyy-MM-dd'));
 
     navigate(`/results?${params.toString()}`);
     onClose();
@@ -148,107 +167,10 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
             </div>
 
             <Dialog.Description className="sr-only">
-              Busca hoteles con filtros avanzados por fecha, plataforma, sentimiento y calificacion minima.
+              Busca hoteles con filtros avanzados por plataforma, sentimiento, calificacion, orden y rango de fechas.
             </Dialog.Description>
 
-            {/* Search Input */}
-            <div className="mb-6">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Hotels for carnival · Best eco hotel · City center..."
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-purple-300 dark:focus:border-purple-500 focus:bg-white dark:focus:bg-slate-600 transition-all text-gray-700 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500"
-              />
-            </div>
-
-            {/* Date Range with Calendar Pickers */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <CalendarIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Rango de Fechas</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-3">
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setShowFromCalendar(!showFromCalendar);
-                      setShowToCalendar(false);
-                    }}
-                    className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 border-2 border-gray-100 dark:border-slate-600 hover:border-purple-200 dark:hover:border-purple-500 transition-all text-left"
-                  >
-                    <label className="text-xs text-gray-400 dark:text-slate-500 block mb-1">Desde</label>
-                    <div className="text-gray-700 dark:text-slate-200 font-medium">
-                      {format(dateFrom, 'MMM yyyy', { locale: es })}
-                    </div>
-                  </button>
-                  <AnimatePresence>
-                    {showFromCalendar && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full mt-2 left-0 bg-white dark:bg-slate-700 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 z-10"
-                      >
-                        <MonthPicker
-                          value={dateFrom}
-                          onChange={setDateFrom}
-                          onClose={() => setShowFromCalendar(false)}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setShowToCalendar(!showToCalendar);
-                      setShowFromCalendar(false);
-                    }}
-                    className="w-full bg-white dark:bg-slate-700 rounded-xl p-3 border-2 border-purple-200 dark:border-purple-700/50 hover:border-purple-300 dark:hover:border-purple-500 transition-all text-left"
-                  >
-                    <label className="text-xs text-gray-400 dark:text-slate-500 block mb-1">Hasta</label>
-                    <div className="text-gray-700 dark:text-slate-200 font-medium">
-                      {format(dateTo, 'MMM yyyy', { locale: es })}
-                    </div>
-                  </button>
-                  <AnimatePresence>
-                    {showToCalendar && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full mt-2 right-0 bg-white dark:bg-slate-700 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 z-10"
-                      >
-                        <MonthPicker
-                          value={dateTo}
-                          onChange={setDateTo}
-                          onClose={() => setShowToCalendar(false)}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {periods.map((period) => (
-                  <button
-                    key={period}
-                    onClick={() => setSelectedPeriod(period)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                      selectedPeriod === period
-                        ? 'bg-gray-200 dark:bg-slate-600 text-gray-800 dark:text-white'
-                        : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {period}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               {/* Platforms */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
@@ -280,53 +202,145 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-orange-400"></div>
-                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Sentimiento</span>
+                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Sentimiento predominante</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {sentiments.map((sentiment) => (
                     <button
-                      key={sentiment}
-                      onClick={() => toggleSentiment(sentiment)}
+                      key={sentiment.value}
+                      onClick={() => setSelectedSentiment(sentiment.value)}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                        selectedSentiment === sentiment
-                          ? sentiment === 'Positive'
+                        selectedSentiment === sentiment.value
+                          ? sentiment.value === 'positive'
                             ? 'bg-green-100 text-green-700 border-2 border-green-300'
-                            : sentiment === 'Neutral'
-                            ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                            : 'bg-orange-100 text-orange-700 border-2 border-orange-300'
+                            : sentiment.value === 'neutral'
+                            ? 'bg-slate-200 text-slate-700 border-2 border-slate-300'
+                            : sentiment.value === 'negative'
+                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-300'
+                            : 'bg-cyan-100 text-cyan-700 border-2 border-cyan-300'
                           : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
                       }`}
                     >
-                      {sentiment}
+                      {sentiment.label}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Rating */}
-            <div className="mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Rating */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Calificacion Min. (1-5)</span>
+                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Calificacion</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setRatingStar(null)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      ratingStar === null
+                        ? 'bg-cyan-100 text-cyan-700 border-2 border-cyan-300'
+                        : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-slate-400 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    Todas
+                  </button>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
-                      onClick={() => setMinRating(star)}
+                      onClick={() => setRatingStar(star)}
                       className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
-                        star === minRating
+                        star === ratingStar
                           ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300 scale-110'
-                          : star < minRating
-                          ? 'bg-yellow-50 text-yellow-600 border-2 border-yellow-200'
-                          : 'bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-slate-500 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
+                          : 'bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-slate-400 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
                       }`}
                     >
                       {star}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full bg-violet-400"></div>
+                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Orden</span>
+                </div>
+                <select
+                  value={sortOrder}
+                  onChange={(event) => setSortOrder(event.target.value as 'reviews' | 'rating-desc' | 'rating-asc')}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-xl text-gray-700 dark:text-slate-200 focus:outline-none focus:border-cyan-400 dark:focus:border-cyan-500"
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Date Range with Calendar Pickers */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <span className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Rango de Fechas</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowFromCalendar(!showFromCalendar);
+                      setShowToCalendar(false);
+                    }}
+                    className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 border-2 border-gray-100 dark:border-slate-600 hover:border-cyan-300 dark:hover:border-cyan-500 transition-all text-left"
+                  >
+                    <label className="text-xs text-gray-400 dark:text-slate-500 block mb-1">Desde</label>
+                    <div className="text-gray-700 dark:text-slate-200 font-medium">
+                      {format(dateFrom, 'MMM yyyy', { locale: es })}
+                    </div>
+                  </button>
+                  <AnimatePresence>
+                    {showFromCalendar && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full mt-2 left-0 bg-white dark:bg-slate-700 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 z-10"
+                      >
+                        <MonthPicker value={dateFrom} onChange={setDateFrom} onClose={() => setShowFromCalendar(false)} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowToCalendar(!showToCalendar);
+                      setShowFromCalendar(false);
+                    }}
+                    className="w-full bg-gray-50 dark:bg-slate-700 rounded-xl p-3 border-2 border-gray-100 dark:border-slate-600 hover:border-cyan-300 dark:hover:border-cyan-500 transition-all text-left"
+                  >
+                    <label className="text-xs text-gray-400 dark:text-slate-500 block mb-1">Hasta</label>
+                    <div className="text-gray-700 dark:text-slate-200 font-medium">
+                      {format(dateTo, 'MMM yyyy', { locale: es })}
+                    </div>
+                  </button>
+                  <AnimatePresence>
+                    {showToCalendar && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full mt-2 right-0 bg-white dark:bg-slate-700 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 z-10"
+                      >
+                        <MonthPicker value={dateTo} onChange={setDateTo} onClose={() => setShowToCalendar(false)} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>

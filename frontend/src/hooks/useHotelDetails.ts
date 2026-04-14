@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import type { Hotel, HotelReview } from '../models/hotel';
+import type { Hotel, HotelAnalytics, HotelReview } from '../models/hotel';
 import { hotelService } from '../services/hotelService';
 
 interface HotelDetailsState {
   hotel: Hotel | null;
+  analytics: HotelAnalytics | null;
   recentReviews: HotelReview[];
   isLoading: boolean;
   error: string | null;
@@ -12,6 +13,7 @@ interface HotelDetailsState {
 
 export function useHotelDetails(hotelId: string | undefined): HotelDetailsState {
   const [hotel, setHotel] = useState<Hotel | null>(null);
+  const [analytics, setAnalytics] = useState<HotelAnalytics | null>(null);
   const [recentReviews, setRecentReviews] = useState<HotelReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +21,7 @@ export function useHotelDetails(hotelId: string | undefined): HotelDetailsState 
   useEffect(() => {
     if (!hotelId) {
       setHotel(null);
+      setAnalytics(null);
       setRecentReviews([]);
       setIsLoading(false);
       return;
@@ -31,9 +34,13 @@ export function useHotelDetails(hotelId: string | undefined): HotelDetailsState 
     async function loadHotel() {
       try {
         setIsLoading(true);
-        const response = await hotelService.getHotelDetail(currentHotelId, controller.signal);
-        setHotel(response);
-        setRecentReviews(response.recentReviews);
+        const [detail, analyticsPayload] = await Promise.all([
+          hotelService.getHotelDetail(currentHotelId, controller.signal),
+          hotelService.getHotelAnalytics(currentHotelId, controller.signal),
+        ]);
+        setHotel(detail);
+        setRecentReviews(detail.recentReviews);
+        setAnalytics(analyticsPayload);
         setError(null);
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === 'AbortError') {
@@ -51,6 +58,7 @@ export function useHotelDetails(hotelId: string | undefined): HotelDetailsState 
 
   return {
     hotel,
+    analytics,
     recentReviews,
     isLoading,
     error,

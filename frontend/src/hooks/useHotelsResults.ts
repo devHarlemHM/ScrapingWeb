@@ -18,7 +18,10 @@ const PAGE_SIZE = 10;
 
 function buildFilters(input: UseHotelsResultsInput): HotelFilters {
   const query = input.searchParams.get('q') ?? '';
+  const isAdvanced = input.searchParams.get('advanced') === '1';
+  const sortFromParams = input.searchParams.get('sort') ?? 'reviews';
   const ratingFromParams = input.searchParams.get('rating') ?? input.searchParams.get('min_rating');
+  const ratingStarFromParams = input.searchParams.get('rating_star');
   const sentimentFromParams = (input.searchParams.get('sentiment') ?? '').toLowerCase();
   const platforms = (input.searchParams.get('platforms') ?? '')
     .split(',')
@@ -27,15 +30,27 @@ function buildFilters(input: UseHotelsResultsInput): HotelFilters {
     .filter(Boolean);
 
   const filters: HotelFilters = {
-    query,
-    // Always rank hotels with more reviews first.
-    sort: 'reviews',
+    advanced: isAdvanced,
+    query: isAdvanced ? '' : query,
+    sort: sortFromParams,
     platforms: input.platformFilter === 'all' ? platforms : [input.platformFilter],
   };
 
-  if (input.ratingFilter !== 'all') {
+  if (isAdvanced) {
+    if (ratingStarFromParams) {
+      const value = Number(ratingStarFromParams);
+      if (!Number.isNaN(value)) filters.ratingStar = value;
+    }
+
+    const dateFrom = input.searchParams.get('date_from');
+    const dateTo = input.searchParams.get('date_to');
+    if (dateFrom) filters.dateFrom = dateFrom;
+    if (dateTo) filters.dateTo = dateTo;
+  }
+
+  if (!isAdvanced && input.ratingFilter !== 'all') {
     filters.minRating = Number(input.ratingFilter);
-  } else if (ratingFromParams) {
+  } else if (!isAdvanced && ratingFromParams) {
     const value = Number(ratingFromParams);
     if (!Number.isNaN(value)) filters.minRating = value;
   }
@@ -97,14 +112,23 @@ export function useHotelsResults(input: UseHotelsResultsInput) {
           setIsLoadingMore(true);
         }
 
-        const response = await hotelService.listHotels(
-          filters,
-          {
-            limit: PAGE_SIZE,
-            offset: page * PAGE_SIZE,
-          },
-          controller.signal,
-        );
+        const response = filters.advanced
+          ? await hotelService.listHotelsAdvanced(
+              filters,
+              {
+                limit: PAGE_SIZE,
+                offset: page * PAGE_SIZE,
+              },
+              controller.signal,
+            )
+          : await hotelService.listHotels(
+              filters,
+              {
+                limit: PAGE_SIZE,
+                offset: page * PAGE_SIZE,
+              },
+              controller.signal,
+            );
 
         setHotels((prev) => {
           if (page === 0) {

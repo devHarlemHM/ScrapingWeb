@@ -9,6 +9,11 @@ import os
 import re
 import json
 import time
+from time import perf_counter
+
+
+def log(message):
+    print(f"[GOOGLE][{datetime.now().strftime('%H:%M:%S')}] {message}", flush=True)
 
 def estimar_fecha(fecha_relativa):
     hoy = datetime.today()
@@ -48,7 +53,8 @@ wait = WebDriverWait(driver, 30)
 datos = {"Barranquilla": []}
 
 try:
-    print("🏨 Abriendo Google Maps...")
+    script_started = perf_counter()
+    log("Abriendo Google Maps...")
     driver.get("https://www.google.com/maps/search/Barranquilla,+hoteles")
     time.sleep(6)
 
@@ -69,7 +75,7 @@ try:
 
     enlaces_hoteles = []
     hoteles = driver.find_elements(By.CSS_SELECTOR, 'div.Nv2PK')
-    print(f"\n🏨 Total de hoteles encontrados: {len(hoteles)}")
+    log(f"Total de hoteles detectados en listado: {len(hoteles)}")
     for idx, hotel in enumerate(hoteles, 1):
         try:
             nombre = hotel.find_element(By.CSS_SELECTOR, 'a.hfpxzc').get_attribute('aria-label')
@@ -83,6 +89,7 @@ try:
             continue
 
     total_comentarios = 0
+    hoteles_ok = 0
 
     for hotel in enlaces_hoteles:
         i = hotel["id"]
@@ -102,8 +109,9 @@ try:
                 driver = webdriver.Chrome(options=opts)
                 wait = WebDriverWait(driver, 30)
 
-            print(f"\n🏨 [{i}] {nombre}")
-            print(f"🔗 {enlace}")
+            hotel_started = perf_counter()
+            log(f"Procesando hotel {i}: {nombre}")
+            log(f"URL hotel: {enlace}")
             driver.get(enlace)
             time.sleep(6)
 
@@ -117,7 +125,7 @@ try:
                     By.XPATH, '//button[@role="tab"][.//div[contains(text(), "Opiniones") or contains(text(), "Revisiones")]]'
                 )))
                 opiniones_tab.click()
-                print("✅ Se abrió la pestaña de opiniones")
+                log("Se abrio pestana de opiniones")
                 time.sleep(4)
 
                 panel = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde')))
@@ -125,7 +133,7 @@ try:
                     driver.execute_script("arguments[0].scrollBy(0, 1000);", panel)
                     time.sleep(2.5)
             except:
-                print("⚠️ No se encontró la pestaña 'Opiniones'. Intentando extraer reseñas directamente...")
+                log("No se encontro pestana de opiniones; se extrae reseñas directamente")
 
             bloques = driver.find_elements(By.CSS_SELECTOR, 'div.jftiEf.fontBodyMedium')
             hashes = set()
@@ -155,7 +163,9 @@ try:
                 except:
                     continue
 
-            print(f"💬 {len(comentarios)} comentarios extraídos")
+            hoteles_ok += 1
+            hotel_elapsed = round(perf_counter() - hotel_started, 2)
+            log(f"Comentarios extraidos del hotel: {len(comentarios)} | duracion={hotel_elapsed}s")
             total_comentarios += len(comentarios)
             datos["Barranquilla"].append({
                 "id": i,
@@ -165,20 +175,25 @@ try:
             })
 
         except Exception as e:
-            print(f"❌ Error con hotel {i}: {str(e)[:60]}")
+            log(f"Error con hotel {i}: {str(e)[:60]}")
             continue
 
     with open("comentarios_hoteles.json", "w", encoding="utf-8") as f:
         json.dump(datos, f, ensure_ascii=False, indent=2)
+    log("Archivo generado: comentarios_hoteles.json")
 
     with open("hoteles_enumerados.json", "w", encoding="utf-8") as f:
         json.dump(enlaces_hoteles, f, ensure_ascii=False, indent=2)
+    log("Archivo generado: hoteles_enumerados.json")
 
-    print(f"\n🎉 Scraping completado: {len(enlaces_hoteles)} hoteles procesados, {total_comentarios} comentarios extraídos.")
-    print("📦 Lista enumerada guardada en hoteles_enumerados.json")
+    total_elapsed = round(perf_counter() - script_started, 2)
+    log(
+        f"Scraping completado: hoteles_listados={len(enlaces_hoteles)}, hoteles_ok={hoteles_ok}, comentarios={total_comentarios}, duracion={total_elapsed}s"
+    )
+    log("Lista enumerada guardada en hoteles_enumerados.json")
 
 except Exception as e:
-    print(f"❌ Error general: {str(e)[:60]}")
+    log(f"Error general: {str(e)[:60]}")
 
 finally:
     try:

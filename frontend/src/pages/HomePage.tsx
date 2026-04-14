@@ -1,86 +1,11 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Star, Leaf, Award, MessageSquare, BarChart3, GitCompare, Sparkles, Database } from 'lucide-react';
-import { ImageWithFallback } from '../share/ImageWithFallback';
+import { Star, BarChart3, Sparkles, Database, Target, Clock3, ShieldCheck } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
-
-const filterCards = [
-  {
-    id: '5stars',
-    name: '5 Estrellas',
-    description: 'Calificación máxima en todas las plataformas',
-    image: 'https://images.unsplash.com/photo-1758193783649-13371d7fb8dd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMGZpdmUlMjBzdGFycyUyMGxvYmJ5JTIwcHJlbWl1bSUyMGludGVyaW9yfGVufDF8fHx8MTc3NDE0MDY1OXww&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-amber-500 via-yellow-500 to-orange-500',
-    icon: Star,
-    badge: '★★★★★',
-    sort: 'rating',
-  },
-  {
-    id: 'sustainability',
-    name: 'Sostenibilidad 5/5',
-    description: 'Máxima puntuación de sostenibilidad',
-    image: 'https://images.unsplash.com/photo-1608387371413-f2566ac510e0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMHN1c3RhaW5hYmlsaXR5JTIwZWNvJTIwZ3JlZW4lMjBhcmNoaXRlY3R1cmV8ZW58MXx8fHwxNzc0MTQwNjU5fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-emerald-500 via-green-500 to-teal-500',
-    icon: Leaf,
-    badge: '🌿 5/5',
-    sort: 'sustainability',
-  },
-  {
-    id: 'top-quality',
-    name: 'Top Calidad',
-    description: 'Mejor puntuación de calidad general',
-    image: 'https://images.unsplash.com/photo-1691138472938-9c71df7e17d7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMHJhdGluZyUyMHF1YWxpdHklMjBhd2FyZCUyMGV4Y2VsbGVuY2V8ZW58MXx8fHwxNzc0MTQwNjYyfDA&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-blue-500 via-indigo-500 to-violet-500',
-    icon: Award,
-    badge: '🏆 Top',
-    sort: 'quality',
-  },
-  {
-    id: 'best-sentiment',
-    name: 'Mejor Sentimiento',
-    description: 'Mayor porcentaje de reseñas positivas por IA',
-    image: 'https://images.unsplash.com/photo-1563244943-ce82ae870e42?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMGd1ZXN0cyUyMGhhcHB5JTIwc21pbGluZyUyMHJldmlld3MlMjBleHBlcmllbmNlfGVufDF8fHx8MTc3NDE0MDY2MXww&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-purple-500 via-fuchsia-500 to-pink-500',
-    icon: Sparkles,
-    badge: '😊 +95%',
-    sort: 'sentiment',
-  },
-  {
-    id: 'most-reviewed',
-    name: 'Más Reseñados',
-    description: 'Mayor volumen de reseñas analizadas',
-    image: 'https://images.unsplash.com/photo-1589568482418-998c3cb2430a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMGRhdGElMjBhbmFseXRpY3MlMjBkYXNoYm9hcmQlMjByZXZpZXdzJTIwc2VudGltZW50fGVufDF8fHx8MTc3NDE0MDY2MHww&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-cyan-500 via-blue-500 to-indigo-500',
-    icon: MessageSquare,
-    badge: '💬 +1K',
-    sort: 'reviews',
-  },
-  {
-    id: 'best-balance',
-    name: 'Mejor Balance',
-    description: 'Equilibrio entre calidad, precio y sostenibilidad',
-    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob3RlbCUyMGNvbXBhcmlzb24lMjBkYXRhJTIwY2hhcnRzJTIwdmlzdWFsaXphdGlvbnxlbnwxfHx8fDE3NzQxNDA2NjZ8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    gradient: 'from-rose-500 via-orange-500 to-amber-500',
-    icon: GitCompare,
-    badge: '⚖️ Balance',
-    sort: 'balance',
-  },
-];
 
 export function HomePage() {
   const navigate = useNavigate();
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const { summary } = useDashboardData();
-
-  const handleFilterClick = (card: typeof filterCards[0]) => {
-    const params = new URLSearchParams({
-      q: '',
-      platforms: 'Google,Booking,Airbnb',
-      sort: card.sort,
-    });
-    navigate(`/results?${params.toString()}`);
-  };
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 transition-colors duration-300">
@@ -115,14 +40,7 @@ export function HomePage() {
             {/* CTA Buttons */}
             <div className="flex items-center justify-center gap-4 mb-16">
               <button
-                onClick={() => {
-                  const params = new URLSearchParams({
-                    q: '',
-                    platforms: 'Google,Booking,Airbnb',
-                    sort: 'sentiment',
-                  });
-                  navigate(`/results?${params.toString()}`);
-                }}
+                onClick={() => navigate('/explore')}
                 className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl hover:shadow-2xl hover:shadow-cyan-500/50 transition-all hover:scale-105"
               >
                 Explorar Hoteles en Barranquilla
@@ -162,7 +80,7 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* Explora hoteles en Barranquilla */}
+      {/* Informacion relevante del aplicativo */}
       <div className="max-w-7xl mx-auto px-8 py-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -171,67 +89,57 @@ export function HomePage() {
           className="mb-12"
         >
           <h2 className="text-5xl font-bold text-gray-800 dark:text-white mb-4">
-            Explora hoteles en Barranquilla
+            Informacion relevante del aplicativo
           </h2>
           <p className="text-xl text-gray-500 dark:text-slate-400">
-            Encuentra opciones según métricas extraídas de plataformas reales ·{' '}
-            <span className="text-yellow-500">★</span> a{' '}
-            <span className="text-yellow-500">★★★★★</span>
+            Conoce que mide HotelLens y como interpretar los resultados antes de explorar
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-          {filterCards.map((card, index) => (
-            <motion.button
-              key={card.id}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {
+              title: 'Que incluye el puntaje',
+              description:
+                'Cada hotel combina calificacion promedio, volumen de reseñas y señales de sentimiento para facilitar comparaciones claras.',
+              icon: Target,
+              color: 'from-cyan-500 to-blue-500',
+            },
+            {
+              title: 'Frecuencia de actualizacion',
+              description:
+                'Los datos se refrescan por ciclos de scraping programados y se normalizan para eliminar duplicados y ruido.',
+              icon: Clock3,
+              color: 'from-purple-500 to-fuchsia-500',
+            },
+            {
+              title: 'Confiabilidad del analisis',
+              description:
+                'Se filtran reseñas no utiles y respuestas de anfitrion para priorizar comentarios reales de huespedes.',
+              icon: ShieldCheck,
+              color: 'from-emerald-500 to-green-500',
+            },
+          ].map((item, index) => (
+            <motion.div
+              key={item.title}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 + index * 0.1 }}
-              onClick={() => handleFilterClick(card)}
-              onMouseEnter={() => setHoveredCard(card.id)}
-              onMouseLeave={() => setHoveredCard(null)}
-              className="group relative h-80 rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-500 text-left"
+              className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-7 shadow-lg dark:shadow-slate-900/50"
             >
-              <div className="absolute inset-0">
-                <ImageWithFallback
-                  src={card.image}
-                  alt={card.name}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-60 group-hover:opacity-70 transition-opacity`}></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+              <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${item.color} mb-5`}>
+                <item.icon className="w-6 h-6 text-white" />
               </div>
-
-              {/* Badge top right */}
-              <div className="absolute top-4 right-4">
-                <span className="px-3 py-1.5 bg-black/30 backdrop-blur-md rounded-full text-white text-sm font-bold border border-white/20">
-                  {card.badge}
-                </span>
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">
+                {item.title}
+              </h3>
+              <p className="text-gray-600 dark:text-slate-300 leading-relaxed">
+                {item.description}
+              </p>
+              <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700 text-sm text-gray-500 dark:text-slate-400">
+                Basado en {summary.totalReviews.toLocaleString()} reseñas analizadas y {summary.totalPlatforms} plataformas
               </div>
-
-              <div className="relative h-full flex flex-col justify-between p-6">
-                <div className="self-start">
-                  <div className="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform">
-                    <card.icon className="w-7 h-7 text-white" />
-                  </div>
-                </div>
-
-                <div className="text-left">
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    {card.name}
-                  </h3>
-                  <p className="text-white/90 text-sm mb-4">
-                    {card.description}
-                  </p>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-xl rounded-xl border border-white/30 text-white text-sm font-medium transition-all ${
-                    hoveredCard === card.id ? 'translate-x-2' : ''
-                  }`}>
-                    Ver hoteles
-                    <span className="text-lg">→</span>
-                  </div>
-                </div>
-              </div>
-            </motion.button>
+            </motion.div>
           ))}
         </div>
       </div>

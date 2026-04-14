@@ -1,5 +1,7 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import check_db_connection, engine, ensure_runtime_schema
 from app.routers import dashboard_router, hotels_router, scrapping_router
@@ -11,6 +13,14 @@ app = FastAPI(
     title="ScrapingWeb Backend",
     version="1.0.0",
     description="Backend minimo con conexion a BD y modelos.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

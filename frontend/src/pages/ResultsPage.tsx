@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,7 +9,6 @@ import {
   Star,
   MapPin,
   Search,
-  SlidersHorizontal,
   Heart,
   Send,
   ExternalLink,
@@ -51,19 +50,30 @@ const getHotelImageIndex = (hotel: Hotel, fallbackIndex: number) => {
   return fallbackIndex;
 };
 
+function buildPlatformFallbackUrl(hotel: Hotel, platform: 'google' | 'booking' | 'airbnb'): string {
+  const query = encodeURIComponent(`${hotel.name} ${hotel.city}`.trim());
+
+  if (platform === 'google') {
+    return `https://www.google.com/maps/search/?api=1&query=${query}`;
+  }
+
+  if (platform === 'booking') {
+    return `https://www.google.com/search?q=${encodeURIComponent(`site:booking.com ${hotel.name} ${hotel.city}`)}`;
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent(`site:airbnb.com ${hotel.name} ${hotel.city}`)}`;
+}
+
 export function ResultsPage() {
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('q')?.trim() ?? '';
-  const hasSearchQuery = searchQuery.length > 0;
+  const isAdvancedSearch = searchParams.get('advanced') === '1';
   const [carouselIndexes, setCarouselIndexes] = useState<Record<string, number>>({});
   const [selectedHotelForReviews, setSelectedHotelForReviews] = useState<Hotel | null>(null);
   const [selectedHotelForSentiment, setSelectedHotelForSentiment] = useState<Hotel | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [ratingFilter, setRatingFilter] = useState<'all' | '5' | '4' | '3' | '2' | '1'>(
-    hasSearchQuery ? 'all' : '5',
-  );
-  const [platformFilter, setPlatformFilter] = useState<'all' | 'google' | 'booking' | 'airbnb'>('all');
-  const [minReviewsFilter, setMinReviewsFilter] = useState<'all' | '50' | '100' | '200'>('all');
+  const ratingFilter: 'all' | '5' | '4' | '3' | '2' | '1' = 'all';
+  const platformFilter: 'all' | 'google' | 'booking' | 'airbnb' = 'all';
+  const minReviewsFilter: 'all' | '50' | '100' | '200' = 'all';
   const [favoritedHotels, setFavoritedHotels] = useState<Set<string>>(new Set());
   const [favoriteCounts, setFavoriteCounts] = useState<Record<string, number>>({});
   const [togglingFavoriteIds, setTogglingFavoriteIds] = useState<Set<string>>(new Set());
@@ -75,15 +85,6 @@ export function ResultsPage() {
     platformFilter,
     minReviewsFilter,
   });
-
-  useEffect(() => {
-    if (hasSearchQuery) {
-      setRatingFilter('all');
-      return;
-    }
-
-    setRatingFilter('5');
-  }, [hasSearchQuery]);
 
   const { reviews: selectedHotelReviews } = useHotelReviews(selectedHotelForReviews?.id ?? null, 50);
 
@@ -149,10 +150,31 @@ export function ResultsPage() {
 
   const platformEntries = (hotel: Hotel) => {
     return [
-      { key: 'google', label: 'Google', color: 'bg-white border-2 border-gray-100', textColor: 'text-gray-500 dark:text-slate-400', url: hotel.platformLinks.google },
-      { key: 'booking', label: 'Booking', color: 'bg-[#003580]', textColor: 'text-gray-500 dark:text-slate-400', url: hotel.platformLinks.booking },
-      { key: 'airbnb', label: 'Airbnb', color: 'bg-[#FF385C]', textColor: 'text-gray-500 dark:text-slate-400', url: hotel.platformLinks.airbnb },
-    ].filter((platform) => Boolean(platform.url));
+      {
+        key: 'google',
+        label: 'Google',
+        color: 'bg-white border-2 border-gray-100',
+        textColor: 'text-gray-500 dark:text-slate-400',
+        hasReviews: hotel.platforms.google > 0,
+        url: hotel.platformLinks.google ?? buildPlatformFallbackUrl(hotel, 'google'),
+      },
+      {
+        key: 'booking',
+        label: 'Booking',
+        color: 'bg-[#003580]',
+        textColor: 'text-gray-500 dark:text-slate-400',
+        hasReviews: hotel.platforms.booking > 0,
+        url: hotel.platformLinks.booking ?? buildPlatformFallbackUrl(hotel, 'booking'),
+      },
+      {
+        key: 'airbnb',
+        label: 'Airbnb',
+        color: 'bg-[#FF385C]',
+        textColor: 'text-gray-500 dark:text-slate-400',
+        hasReviews: hotel.platforms.airbnb > 0,
+        url: hotel.platformLinks.airbnb ?? buildPlatformFallbackUrl(hotel, 'airbnb'),
+      },
+    ].filter((platform) => platform.hasReviews);
   };
 
   return (
@@ -167,91 +189,10 @@ export function ResultsPage() {
                   onClick={() => setIsSearchModalOpen(true)}
                   className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-600 rounded-xl text-left text-gray-400 dark:text-slate-500 hover:border-cyan-400 dark:hover:border-cyan-500 hover:bg-white dark:hover:bg-slate-700 transition-all cursor-pointer"
                 >
-                  {searchQuery || 'Buscar hoteles en Barranquilla...'}
+                  {searchQuery || (isAdvancedSearch ? 'Busqueda avanzada aplicada' : 'Buscar hoteles en Barranquilla...')}
                 </button>
               </div>
-
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
-                  showFilters
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg'
-                    : 'bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:border-cyan-300 dark:hover:border-cyan-500'
-                }`}
-              >
-                <SlidersHorizontal className="w-5 h-5" />
-                Filtros de analisis
-              </button>
             </div>
-
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="pt-4 mt-4 border-t border-gray-200 dark:border-slate-700">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                          <Star className="w-4 h-4" />
-                          Estrellas (1-5)
-                        </label>
-                        <select
-                          value={ratingFilter}
-                          onChange={(e) => setRatingFilter(e.target.value as 'all' | '5' | '4' | '3' | '2' | '1')}
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
-                        >
-                          <option value="all">Todas</option>
-                          <option value="5">5 estrellas</option>
-                          <option value="4">4 estrellas o más</option>
-                          <option value="3">3 estrellas o más</option>
-                          <option value="2">2 estrellas o más</option>
-                          <option value="1">1 estrella o más</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          Plataforma
-                        </label>
-                        <select
-                          value={platformFilter}
-                          onChange={(e) => setPlatformFilter(e.target.value as 'all' | 'google' | 'booking' | 'airbnb')}
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
-                        >
-                          <option value="all">Todas</option>
-                          <option value="google">Google</option>
-                          <option value="booking">Booking</option>
-                          <option value="airbnb">Airbnb</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          Min. reseñas
-                        </label>
-                        <select
-                          value={minReviewsFilter}
-                          onChange={(e) => setMinReviewsFilter(e.target.value as 'all' | '50' | '100' | '200')}
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-lg text-gray-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
-                        >
-                          <option value="all">Cualquiera</option>
-                          <option value="50">50+</option>
-                          <option value="100">100+</option>
-                          <option value="200">200+</option>
-                        </select>
-                      </div>
-
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
 

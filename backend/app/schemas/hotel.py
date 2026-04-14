@@ -72,3 +72,48 @@ class FavoriteUpdateIn(BaseModel):
 class FavoriteUpdateOut(BaseModel):
     hotel_id: str
     favorites_count: int
+
+
+class SentimentPercentagesOut(BaseModel):
+    positive: float
+    neutral: float
+    negative: float
+
+
+class PlatformBreakdownOut(BaseModel):
+    platform: str
+    reviews: int
+    avg_rating: float | None = None
+    positive: int
+    neutral: int
+    negative: int
+    positive_pct: float
+
+
+class TopicAnalysisOut(BaseModel):
+    topic: str
+    mentions: int
+    positive: int
+    neutral: int
+    negative: int
+    positive_pct: float
+
+
+class TrendPointOut(BaseModel):
+    month: str
+    positive: int
+    neutral: int
+    negative: int
+    total: int
+    positive_pct: float
+
+
+class HotelAnalyticsOut(BaseModel):
+    hotel_id: str
+    hotel_name: str
+    total_reviews: int
+    sentiments: SentimentsOut
+    sentiment_percentages: SentimentPercentagesOut
+    platform_breakdown: list[PlatformBreakdownOut]
+    topics: list[TopicAnalysisOut]
+    trend_6m: list[TrendPointOut]

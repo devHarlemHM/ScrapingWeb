@@ -1,6 +1,7 @@
 import { apiRequest } from '../core/apiClient';
 import { apiEndpoints } from './endpoints';
 import type {
+  HotelAnalytics,
   Hotel,
   HotelFilters,
   HotelPlatforms,
@@ -73,6 +74,43 @@ interface ApiHotelReviewsResponse {
 
 interface ApiHotelDetail extends ApiHotel {
   recent_reviews: ApiReview[];
+}
+
+interface ApiHotelAnalytics {
+  hotel_id: string;
+  hotel_name: string;
+  total_reviews: number;
+  sentiments: ApiSentiments;
+  sentiment_percentages: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+  platform_breakdown: Array<{
+    platform: string;
+    reviews: number;
+    avg_rating?: number | null;
+    positive: number;
+    neutral: number;
+    negative: number;
+    positive_pct: number;
+  }>;
+  topics: Array<{
+    topic: string;
+    mentions: number;
+    positive: number;
+    neutral: number;
+    negative: number;
+    positive_pct: number;
+  }>;
+  trend_6m: Array<{
+    month: string;
+    positive: number;
+    neutral: number;
+    negative: number;
+    total: number;
+    positive_pct: number;
+  }>;
 }
 
 const DEFAULT_IMAGE =
@@ -181,6 +219,20 @@ function buildHotelsQuery(filters: HotelFilters): string {
   return query ? `?${query}` : '';
 }
 
+function buildAdvancedHotelsQuery(filters: HotelFilters): string {
+  const params = new URLSearchParams();
+
+  if (filters.sort) params.set('sort', filters.sort);
+  if (filters.sentiment) params.set('sentiment', filters.sentiment);
+  if (filters.ratingStar !== undefined) params.set('rating_star', filters.ratingStar.toString());
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.platforms && filters.platforms.length > 0) params.set('platforms', filters.platforms.join(','));
+
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export const hotelService = {
   async listHotels(
     filters: HotelFilters,
@@ -198,11 +250,67 @@ export const hotelService = {
     return response.map(mapHotel);
   },
 
+  async listHotelsAdvanced(
+    filters: HotelFilters,
+    options: { limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<Hotel[]> {
+    const query = buildAdvancedHotelsQuery(filters);
+    const separator = query ? '&' : '?';
+    const limitParam = options.limit !== undefined ? `limit=${options.limit}` : '';
+    const offsetParam = options.offset !== undefined ? `offset=${options.offset}` : '';
+    const pagination = [limitParam, offsetParam].filter(Boolean).join('&');
+    const fullQuery = pagination ? `${query}${separator}${pagination}` : query;
+
+    const response = await apiRequest<ApiHotel[]>(`${apiEndpoints.hotels.advancedSearch}${fullQuery}`, { signal });
+    return response.map(mapHotel);
+  },
+
   async getHotelDetail(hotelId: string, signal?: AbortSignal): Promise<Hotel & { recentReviews: HotelReview[] }> {
     const response = await apiRequest<ApiHotelDetail>(apiEndpoints.hotels.detail(hotelId), { signal });
     return {
       ...mapHotel(response),
       recentReviews: (response.recent_reviews ?? []).map(mapReview),
+    };
+  },
+
+  async getHotelAnalytics(hotelId: string, signal?: AbortSignal): Promise<HotelAnalytics> {
+    const response = await apiRequest<ApiHotelAnalytics>(apiEndpoints.hotels.analytics(hotelId), { signal });
+    return {
+      hotelId: response.hotel_id,
+      hotelName: response.hotel_name,
+      totalReviews: response.total_reviews,
+      sentiments: mapSentiments(response.sentiments),
+      sentimentPercentages: {
+        positive: Number(response.sentiment_percentages.positive ?? 0),
+        neutral: Number(response.sentiment_percentages.neutral ?? 0),
+        negative: Number(response.sentiment_percentages.negative ?? 0),
+      },
+      platformBreakdown: (response.platform_breakdown ?? []).map((item) => ({
+        platform: normalizePlatform(item.platform),
+        reviews: Number(item.reviews ?? 0),
+        avgRating: item.avg_rating !== null && item.avg_rating !== undefined ? Number(item.avg_rating) : null,
+        positive: Number(item.positive ?? 0),
+        neutral: Number(item.neutral ?? 0),
+        negative: Number(item.negative ?? 0),
+        positivePct: Number(item.positive_pct ?? 0),
+      })),
+      topics: (response.topics ?? []).map((item) => ({
+        topic: item.topic,
+        mentions: Number(item.mentions ?? 0),
+        positive: Number(item.positive ?? 0),
+        neutral: Number(item.neutral ?? 0),
+        negative: Number(item.negative ?? 0),
+        positivePct: Number(item.positive_pct ?? 0),
+      })),
+      trend6m: (response.trend_6m ?? []).map((item) => ({
+        month: item.month,
+        positive: Number(item.positive ?? 0),
+        neutral: Number(item.neutral ?? 0),
+        negative: Number(item.negative ?? 0),
+        total: Number(item.total ?? 0),
+        positivePct: Number(item.positive_pct ?? 0),
+      })),
     };
   },
 
