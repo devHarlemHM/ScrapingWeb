@@ -1,11 +1,19 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PlatformIn(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     status: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 2:
+            raise ValueError("Nombre de plataforma invalido")
+        return normalized
 
 
 class PlatformOut(BaseModel):
@@ -19,6 +27,14 @@ class PlatformOut(BaseModel):
 class SentimentIn(BaseModel):
     name: str = Field(min_length=2, max_length=50)
     status: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 2:
+            raise ValueError("Nombre de sentimiento invalido")
+        return normalized
 
 
 class SentimentOut(BaseModel):
@@ -44,12 +60,28 @@ class UserIn(BaseModel):
     password: str = Field(min_length=6, max_length=255)
     role: str = Field(pattern="^(admin|consultant)$")
 
+    @field_validator("username", "password")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Campo requerido")
+        return normalized
+
 
 class UserUpdateIn(BaseModel):
     username: str = Field(min_length=2, max_length=120)
     email: str = Field(min_length=5, max_length=255)
     role: str = Field(pattern="^(admin|consultant)$")
     password: str | None = Field(default=None, min_length=6, max_length=255)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Username requerido")
+        return normalized
 
 
 class UserOut(BaseModel):
@@ -62,6 +94,14 @@ class UserOut(BaseModel):
 class LoginIn(BaseModel):
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=1)
+
+    @field_validator("email", "password")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Campo requerido")
+        return normalized
 
 
 class AuthUserOut(BaseModel):

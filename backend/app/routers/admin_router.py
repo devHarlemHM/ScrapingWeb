@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.auth import create_access_token, get_current_user
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
 from app.models.platform import Platform
@@ -26,6 +28,13 @@ from app.schemas.admin import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["Admin"])
+
+
+def _validate_email(email: str) -> str:
+    normalized = (email or "").strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+        raise HTTPException(status_code=422, detail="Email invalido")
+    return normalized
 
 
 def _as_uuid(value: str) -> UUID:
@@ -54,8 +63,14 @@ def list_platforms(active: bool | None = Query(default=None), db: Session = Depe
 
 
 @router.post("/platforms", response_model=PlatformOut)
-def create_platform(payload: PlatformIn, db: Session = Depends(get_db)) -> PlatformOut:
+def create_platform(
+    payload: PlatformIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> PlatformOut:
     normalized_name = payload.name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="Nombre de plataforma requerido")
     existing = db.query(Platform).filter(Platform.name.ilike(normalized_name)).first()
     if existing:
         raise HTTPException(status_code=409, detail="La plataforma ya existe")
@@ -68,12 +83,20 @@ def create_platform(payload: PlatformIn, db: Session = Depends(get_db)) -> Platf
 
 
 @router.put("/platforms/{platform_id}", response_model=PlatformOut)
-def update_platform(platform_id: str, payload: PlatformIn, db: Session = Depends(get_db)) -> PlatformOut:
+def update_platform(
+    platform_id: str,
+    payload: PlatformIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> PlatformOut:
     row = db.query(Platform).filter(Platform.id == _as_uuid(platform_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Plataforma no encontrada")
 
-    row.name = payload.name.strip()
+    normalized_name = payload.name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="Nombre de plataforma requerido")
+    row.name = normalized_name
     row.status = payload.status
     db.commit()
     db.refresh(row)
@@ -81,7 +104,11 @@ def update_platform(platform_id: str, payload: PlatformIn, db: Session = Depends
 
 
 @router.patch("/platforms/{platform_id}/toggle", response_model=PlatformOut)
-def toggle_platform(platform_id: str, db: Session = Depends(get_db)) -> PlatformOut:
+def toggle_platform(
+    platform_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> PlatformOut:
     row = db.query(Platform).filter(Platform.id == _as_uuid(platform_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Plataforma no encontrada")
@@ -93,7 +120,11 @@ def toggle_platform(platform_id: str, db: Session = Depends(get_db)) -> Platform
 
 
 @router.delete("/platforms/{platform_id}")
-def delete_platform(platform_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+def delete_platform(
+    platform_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, bool]:
     row = db.query(Platform).filter(Platform.id == _as_uuid(platform_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Plataforma no encontrada")
@@ -122,8 +153,14 @@ def list_sentiments(active: bool | None = Query(default=None), db: Session = Dep
 
 
 @router.post("/sentiments", response_model=SentimentOut)
-def create_sentiment(payload: SentimentIn, db: Session = Depends(get_db)) -> SentimentOut:
+def create_sentiment(
+    payload: SentimentIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SentimentOut:
     normalized_name = payload.name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="Nombre de sentimiento requerido")
     existing = db.query(SentimentConfig).filter(SentimentConfig.name.ilike(normalized_name)).first()
     if existing:
         raise HTTPException(status_code=409, detail="El sentimiento ya existe")
@@ -136,12 +173,20 @@ def create_sentiment(payload: SentimentIn, db: Session = Depends(get_db)) -> Sen
 
 
 @router.put("/sentiments/{sentiment_id}", response_model=SentimentOut)
-def update_sentiment(sentiment_id: str, payload: SentimentIn, db: Session = Depends(get_db)) -> SentimentOut:
+def update_sentiment(
+    sentiment_id: str,
+    payload: SentimentIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SentimentOut:
     row = db.query(SentimentConfig).filter(SentimentConfig.id == _as_uuid(sentiment_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Sentimiento no encontrado")
 
-    row.name = payload.name.strip()
+    normalized_name = payload.name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="Nombre de sentimiento requerido")
+    row.name = normalized_name
     row.status = payload.status
     db.commit()
     db.refresh(row)
@@ -149,7 +194,11 @@ def update_sentiment(sentiment_id: str, payload: SentimentIn, db: Session = Depe
 
 
 @router.patch("/sentiments/{sentiment_id}/toggle", response_model=SentimentOut)
-def toggle_sentiment(sentiment_id: str, db: Session = Depends(get_db)) -> SentimentOut:
+def toggle_sentiment(
+    sentiment_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SentimentOut:
     row = db.query(SentimentConfig).filter(SentimentConfig.id == _as_uuid(sentiment_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Sentimiento no encontrado")
@@ -161,7 +210,11 @@ def toggle_sentiment(sentiment_id: str, db: Session = Depends(get_db)) -> Sentim
 
 
 @router.delete("/sentiments/{sentiment_id}")
-def delete_sentiment(sentiment_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+def delete_sentiment(
+    sentiment_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, bool]:
     row = db.query(SentimentConfig).filter(SentimentConfig.id == _as_uuid(sentiment_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Sentimiento no encontrado")
@@ -188,7 +241,11 @@ def list_scrapings(db: Session = Depends(get_db)) -> list[ScrapingOut]:
 
 
 @router.patch("/scrapings/{scraping_id}/activate", response_model=ScrapingOut)
-def activate_scraping(scraping_id: str, db: Session = Depends(get_db)) -> ScrapingOut:
+def activate_scraping(
+    scraping_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ScrapingOut:
     row = db.query(Scraping).filter(Scraping.id == _as_uuid(scraping_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Scraping no encontrado")
@@ -208,20 +265,31 @@ def activate_scraping(scraping_id: str, db: Session = Depends(get_db)) -> Scrapi
 
 
 @router.get("/users", response_model=list[UserOut])
-def list_users(db: Session = Depends(get_db)) -> list[UserOut]:
+def list_users(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[UserOut]:
     rows = db.query(User).order_by(User.created_at.asc()).all()
     return [UserOut(id=str(item.id), username=item.username, email=item.email, role=item.role) for item in rows]
 
 
 @router.post("/users", response_model=UserOut)
-def create_user(payload: UserIn, db: Session = Depends(get_db)) -> UserOut:
-    existing = db.query(User).filter(User.email == payload.email.lower()).first()
+def create_user(
+    payload: UserIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> UserOut:
+    normalized_username = payload.username.strip()
+    if not normalized_username:
+        raise HTTPException(status_code=422, detail="Username requerido")
+    normalized_email = _validate_email(payload.email)
+    existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
         raise HTTPException(status_code=409, detail="El email ya existe")
 
     row = User(
-        username=payload.username.strip(),
-        email=payload.email.lower(),
+        username=normalized_username,
+        email=normalized_email,
         password=hash_password(payload.password),
         role=payload.role,
     )
@@ -232,13 +300,27 @@ def create_user(payload: UserIn, db: Session = Depends(get_db)) -> UserOut:
 
 
 @router.put("/users/{user_id}", response_model=UserOut)
-def update_user(user_id: str, payload: UserUpdateIn, db: Session = Depends(get_db)) -> UserOut:
+def update_user(
+    user_id: str,
+    payload: UserUpdateIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> UserOut:
     row = db.query(User).filter(User.id == _as_uuid(user_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    row.username = payload.username.strip()
-    row.email = payload.email.lower()
+    normalized_username = payload.username.strip()
+    if not normalized_username:
+        raise HTTPException(status_code=422, detail="Username requerido")
+
+    normalized_email = _validate_email(payload.email)
+    existing = db.query(User).filter(User.email == normalized_email, User.id != row.id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="El email ya existe")
+
+    row.username = normalized_username
+    row.email = normalized_email
     row.role = payload.role
     if payload.password:
         row.password = hash_password(payload.password)
@@ -249,7 +331,11 @@ def update_user(user_id: str, payload: UserUpdateIn, db: Session = Depends(get_d
 
 
 @router.delete("/users/{user_id}")
-def delete_user(user_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
+def delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict[str, bool]:
     row = db.query(User).filter(User.id == _as_uuid(user_id)).first()
     if not row:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -261,12 +347,18 @@ def delete_user(user_id: str, db: Session = Depends(get_db)) -> dict[str, bool]:
 
 @router.post("/auth/login", response_model=LoginOut)
 def auth_login(payload: LoginIn, db: Session = Depends(get_db)) -> LoginOut:
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    normalized_email = _validate_email(payload.email)
+    user = db.query(User).filter(User.email == normalized_email).first()
     if not user or not verify_password(payload.password, user.password):
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
 
+    access_token = create_access_token(
+        subject=str(user.id),
+        additional_claims={"role": user.role, "email": user.email},
+    )
+
     return LoginOut(
         authenticated=True,
-        token=f"user-{user.id}",
+        token=access_token,
         user=AuthUserOut(id=str(user.id), username=user.username, email=user.email, role=user.role),
     )

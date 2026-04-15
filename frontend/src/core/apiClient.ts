@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const AUTH_STORAGE_KEY = 'hotelens.auth';
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -16,9 +17,21 @@ interface RequestOptions extends RequestInit {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  let accessToken: string | null = null;
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { token?: string };
+      accessToken = parsed?.token ?? null;
+    }
+  } catch {
+    accessToken = null;
+  }
+
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers ?? {}),
     },
     ...options,

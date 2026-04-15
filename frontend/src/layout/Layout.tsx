@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Sidebar } from './Sidebar';
 import { SearchModal } from '../pages/SearchModal';
 import { LoginModal } from '../pages/LoginModal';
@@ -9,10 +10,17 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
+  const navigate = useNavigate();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const { isAuthenticated, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(false);
+    }
+  }, [isAuthenticated]);
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -24,7 +32,9 @@ export function Layout({ children }: LayoutProps) {
           isAuthenticated={isAuthenticated}
           onAuthClick={() => {
             if (isAuthenticated) {
+              setIsLoginModalOpen(false);
               signOut();
+              navigate('/', { replace: true });
             } else {
               setIsLoginModalOpen(true);
             }
@@ -35,7 +45,10 @@ export function Layout({ children }: LayoutProps) {
           {children}
         </div>
         <SearchModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} />
-        <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={() => setIsLoginModalOpen(false)}
+        />
       </div>
     </div>
   );

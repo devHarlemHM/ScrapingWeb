@@ -217,7 +217,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                             transition={{ duration: 0.2 }}
                             className="font-medium whitespace-nowrap"
                           >
-                            Admin Panel
+                            Panel Administrativo
                           </motion.span>
                         )}
                       </AnimatePresence>
@@ -231,7 +231,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                       className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
                       sideOffset={10}
                     >
-                      Admin Panel
+                      Panel Administrativo
                       <Tooltip.Arrow className="fill-slate-900" />
                     </Tooltip.Content>
                   </Tooltip.Portal>
@@ -260,7 +260,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                             transition={{ duration: 0.2 }}
                             className="font-medium whitespace-nowrap"
                           >
-                            User Management
+                            Gestión de Usuarios
                           </motion.span>
                         )}
                       </AnimatePresence>
@@ -274,7 +274,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                       className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
                       sideOffset={10}
                     >
-                      User Management
+                      Gestión de Usuarios
                       <Tooltip.Arrow className="fill-slate-900" />
                     </Tooltip.Content>
                   </Tooltip.Portal>
@@ -351,7 +351,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                         transition={{ duration: 0.2 }}
                         className="font-medium whitespace-nowrap"
                       >
-                        {isAuthenticated ? 'Sign Out' : 'Sign In'}
+                        {isAuthenticated ? 'Cerrar sesión' : 'Iniciar sesión'}
                       </motion.span>
                     )}
                   </AnimatePresence>
@@ -364,7 +364,7 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthent
                     className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
                     sideOffset={10}
                   >
-                    {isAuthenticated ? 'Sign Out' : 'Sign In'}
+                      {isAuthenticated ? 'Cerrar sesión' : 'Iniciar sesión'}
                     <Tooltip.Arrow className="fill-slate-900" />
                   </Tooltip.Content>
                 </Tooltip.Portal>
