@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import check_db_connection, engine, ensure_runtime_schema
-from app.routers import dashboard_router, hotels_router, scrapping_router
+from app.routers import admin_router, dashboard_router, hotels_router, scrapping_router
 from app.scrapping.orchestrator import start_scheduler, stop_scheduler
 import app.models  # noqa: F401
 
@@ -58,3 +58,4 @@ def db_check() -> dict:
 app.include_router(dashboard_router)
 app.include_router(hotels_router)
 app.include_router(scrapping_router)
+app.include_router(admin_router)

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.fuente import Fuente
 from app.models.hotel import Hotel
 from app.models.resena import Resena
+from app.models.scraping import Scraping
 from app.models.scrape_run import ScrapeRun
 
 
@@ -159,6 +160,20 @@ def _latest_completed_run_id(db: Session) -> UUID | None:
 def _resolve_effective_scrape_run_id(db: Session, requested_scrape_run_id: str | None) -> UUID | None:
     latest_completed_id = _latest_completed_run_id(db)
     if not requested_scrape_run_id:
+        active_scraping = (
+            db.query(Scraping)
+            .filter(Scraping.is_active.is_(True))
+            .order_by(Scraping.updated_at.desc().nullslast(), Scraping.created_at.desc())
+            .first()
+        )
+        if active_scraping:
+            try:
+                active_run_id = UUID(active_scraping.source)
+                active_run = db.query(ScrapeRun).filter(ScrapeRun.id == active_run_id).first()
+                if active_run and active_run.estado == "completed":
+                    return active_run.id
+            except (TypeError, ValueError):
+                pass
         return latest_completed_id
 
     try:
@@ -486,6 +501,24 @@ def _platform_links_for_hotels(db: Session, hotel_ids: list[Any]) -> dict[str, d
         return payload
 
     try:
+        existence_stmt = text(
+            """
+            SELECT
+                to_regclass(:hotel_plataforma_table) IS NOT NULL AS has_hotel_plataforma,
+                to_regclass(:plataformas_table) IS NOT NULL AS has_plataformas
+            """
+        )
+        existence = db.execute(
+            existence_stmt,
+            {
+                "hotel_plataforma_table": "hotel_plataforma",
+                "plataformas_table": "plataformas",
+            },
+        ).mappings().one()
+
+        if not (existence["has_hotel_plataforma"] and existence["has_plataformas"]):
+            return payload
+
         stmt = (
             text(
                 """

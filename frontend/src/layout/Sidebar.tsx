@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Home, Search, Compass, TrendingUp, Moon, Sun } from 'lucide-react';
+import { Home, Search, Compass, TrendingUp, Moon, Sun, Shield, Users, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
@@ -8,9 +8,11 @@ interface SidebarProps {
   onSearchClick: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
+  isAuthenticated: boolean;
+  onAuthClick: () => void;
 }
 
-export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode }: SidebarProps) {
+export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode, isAuthenticated, onAuthClick }: SidebarProps) {
   const location = useLocation();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -59,136 +61,227 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode }: Sidebar
 
         {/* Navigation - Centered */}
         <nav className="flex-1 flex flex-col justify-center gap-2 px-4">
-          {/* Home */}
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <Link to="/">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
-                    isActive('/')
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                      : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
-                  }`}
-                >
-                  <Home className="w-5 h-5 flex-shrink-0" />
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.span
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="font-medium whitespace-nowrap"
-                      >
-                        Inicio
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </Link>
-            </Tooltip.Trigger>
-            {!isExpanded && (
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  side="right"
-                  className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
-                  sideOffset={10}
-                >
-                  Inicio
-                  <Tooltip.Arrow className="fill-slate-900" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            )}
-          </Tooltip.Root>
+          {!isAuthenticated && (
+            <>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <Link to="/">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+                        isActive('/')
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                          : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <Home className="w-5 h-5 flex-shrink-0" />
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.span
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="font-medium whitespace-nowrap"
+                          >
+                            Inicio
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </Link>
+                </Tooltip.Trigger>
+                {!isExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      side="right"
+                      className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                      sideOffset={10}
+                    >
+                      Inicio
+                      <Tooltip.Arrow className="fill-slate-900" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
 
-          {/* Explore */}
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <Link to="/explore">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
-                    isActive('/explore')
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                      : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
-                  }`}
-                >
-                  <Compass className="w-5 h-5 flex-shrink-0" />
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.span
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="font-medium whitespace-nowrap"
-                      >
-                        Explorar
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </Link>
-            </Tooltip.Trigger>
-            {!isExpanded && (
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  side="right"
-                  className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
-                  sideOffset={10}
-                >
-                  Explorar
-                  <Tooltip.Arrow className="fill-slate-900" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            )}
-          </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <Link to="/explore">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+                        isActive('/explore')
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                          : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <Compass className="w-5 h-5 flex-shrink-0" />
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.span
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="font-medium whitespace-nowrap"
+                          >
+                            Explorar
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </Link>
+                </Tooltip.Trigger>
+                {!isExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      side="right"
+                      className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                      sideOffset={10}
+                    >
+                      Explorar
+                      <Tooltip.Arrow className="fill-slate-900" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
 
-          {/* Search */}
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onSearchClick}
-                className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
-                  location.pathname.includes('/results')
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                    : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
-                }`}
-              >
-                <Search className="w-5 h-5 flex-shrink-0" />
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.span
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="font-medium whitespace-nowrap"
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={onSearchClick}
+                    className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+                      location.pathname.includes('/results')
+                        ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                        : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
+                    }`}
+                  >
+                    <Search className="w-5 h-5 flex-shrink-0" />
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="font-medium whitespace-nowrap"
+                        >
+                          Búsqueda
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                </Tooltip.Trigger>
+                {!isExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      side="right"
+                      className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                      sideOffset={10}
                     >
                       Búsqueda
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
-            </Tooltip.Trigger>
-            {!isExpanded && (
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  side="right"
-                  className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
-                  sideOffset={10}
-                >
-                  Búsqueda
-                  <Tooltip.Arrow className="fill-slate-900" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            )}
-          </Tooltip.Root>
+                      <Tooltip.Arrow className="fill-slate-900" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
+            </>
+          )}
+
+          {isAuthenticated && (
+            <>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <Link to="/admin">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+                        isActive('/admin')
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                          : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <Shield className="w-5 h-5 flex-shrink-0" />
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.span
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="font-medium whitespace-nowrap"
+                          >
+                            Admin Panel
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </Link>
+                </Tooltip.Trigger>
+                {!isExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      side="right"
+                      className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                      sideOffset={10}
+                    >
+                      Admin Panel
+                      <Tooltip.Arrow className="fill-slate-900" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
+
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <Link to="/users">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+                        isActive('/users')
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                          : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-5 h-5 flex-shrink-0" />
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.span
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="font-medium whitespace-nowrap"
+                          >
+                            User Management
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </Link>
+                </Tooltip.Trigger>
+                {!isExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      side="right"
+                      className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                      sideOffset={10}
+                    >
+                      User Management
+                      <Tooltip.Arrow className="fill-slate-900" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
+            </>
+          )}
         </nav>
 
         {/* Footer - Dark Mode Toggle */}
@@ -234,6 +327,50 @@ export function Sidebar({ onSearchClick, isDarkMode, onToggleDarkMode }: Sidebar
               </Tooltip.Portal>
             )}
           </Tooltip.Root>
+
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={onAuthClick}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800 dark:hover:text-white transition-all"
+                >
+                  {isAuthenticated ? (
+                    <LogOut className="w-5 h-5 flex-shrink-0 text-rose-500" />
+                  ) : (
+                    <LogIn className="w-5 h-5 flex-shrink-0 text-cyan-600" />
+                  )}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="font-medium whitespace-nowrap"
+                      >
+                        {isAuthenticated ? 'Sign Out' : 'Sign In'}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              </Tooltip.Trigger>
+              {!isExpanded && (
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    side="right"
+                    className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm shadow-xl border border-slate-700"
+                    sideOffset={10}
+                  >
+                    {isAuthenticated ? 'Sign Out' : 'Sign In'}
+                    <Tooltip.Arrow className="fill-slate-900" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              )}
+            </Tooltip.Root>
+          </div>
           
           <AnimatePresence>
             {isExpanded && (

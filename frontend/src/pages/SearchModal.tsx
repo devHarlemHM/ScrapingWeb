@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { endOfMonth, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'motion/react';
+import type { PlatformConfig, SentimentConfig } from '../models/admin';
+import { adminService } from '../services/adminService';
 
 // ── MonthPicker inline component ──────────────────────────────────────────────
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -79,18 +81,29 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [showToCalendar, setShowToCalendar] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date(2024, 0, 1));
   const [dateTo, setDateTo] = useState<Date>(new Date());
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Google', 'Booking', 'Airbnb']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedSentiment, setSelectedSentiment] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all');
   const [ratingStar, setRatingStar] = useState<number | null>(null);
   const [sortOrder, setSortOrder] = useState<'reviews' | 'rating-desc' | 'rating-asc'>('reviews');
+  const [platforms, setPlatforms] = useState<PlatformConfig[]>([]);
+  const [sentimentsRows, setSentimentsRows] = useState<SentimentConfig[]>([]);
 
-  const platforms = ['Google', 'Booking', 'Airbnb'];
-  const sentiments: Array<{ label: string; value: 'all' | 'positive' | 'neutral' | 'negative' }> = [
-    { label: 'Todos', value: 'all' },
-    { label: 'Positivo', value: 'positive' },
-    { label: 'Neutral', value: 'neutral' },
-    { label: 'Negativo', value: 'negative' },
-  ];
+  const sentiments = useMemo<Array<{ label: string; value: 'all' | 'positive' | 'neutral' | 'negative' }>>(
+    () => {
+      const dynamic = sentimentsRows
+        .map((item) => {
+          const value = item.name.trim().toLowerCase();
+          if (value === 'positive' || value === 'neutral' || value === 'negative') {
+            return { label: item.name, value };
+          }
+          return null;
+        })
+        .filter((item): item is { label: string; value: 'positive' | 'neutral' | 'negative' } => !!item);
+
+      return [{ label: 'Todos', value: 'all' }, ...dynamic];
+    },
+    [sentimentsRows],
+  );
 
   const sortOptions: Array<{ label: string; value: 'reviews' | 'rating-desc' | 'rating-asc' }> = [
     { label: 'Mas resenas', value: 'reviews' },
@@ -98,9 +111,51 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     { label: 'Menor a mayor calificacion', value: 'rating-asc' },
   ];
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadFilterOptions() {
+      try {
+        const [activePlatforms, activeSentiments] = await Promise.all([
+          adminService.listPlatforms(true, controller.signal),
+          adminService.listSentiments(true, controller.signal),
+        ]);
+        setPlatforms(activePlatforms);
+        setSentimentsRows(activeSentiments);
+        setSelectedPlatforms((prev) => {
+          const next = activePlatforms.map((item) => item.name);
+          if (prev.length === 0) {
+            return next;
+          }
+          const allowed = new Set(next);
+          const filtered = prev.filter((name) => allowed.has(name));
+          return filtered.length > 0 ? filtered : next;
+        });
+      } catch {
+        setPlatforms([
+          { id: 'fallback-google', name: 'Google', status: true, created_at: '', updated_at: null },
+          { id: 'fallback-booking', name: 'Booking', status: true, created_at: '', updated_at: null },
+          { id: 'fallback-airbnb', name: 'Airbnb', status: true, created_at: '', updated_at: null },
+        ]);
+        setSentimentsRows([
+          { id: 'fallback-positive', name: 'Positive', status: true, created_at: '', updated_at: null },
+          { id: 'fallback-neutral', name: 'Neutral', status: true, created_at: '', updated_at: null },
+          { id: 'fallback-negative', name: 'Negative', status: true, created_at: '', updated_at: null },
+        ]);
+        setSelectedPlatforms((prev) => (prev.length === 0 ? ['Google', 'Booking', 'Airbnb'] : prev));
+      }
+    }
+
+    if (isOpen) {
+      loadFilterOptions();
+    }
+
+    return () => controller.abort();
+  }, [isOpen]);
+
   const togglePlatform = (platform: string) => {
     setSelectedPlatforms((prev) => {
-      if (prev.includes(platform)) {
+        if (prev.includes(platform)) {
         if (prev.length === 1) {
           return prev;
         }
@@ -180,19 +235,19 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 <div className="flex flex-wrap gap-2">
                   {platforms.map((platform) => (
                     <button
-                      key={platform}
-                      onClick={() => togglePlatform(platform)}
+                      key={platform.id}
+                      onClick={() => togglePlatform(platform.name)}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                        selectedPlatforms.includes(platform)
-                          ? platform === 'Google'
+                        selectedPlatforms.includes(platform.name)
+                          ? platform.name === 'Google'
                             ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                            : platform === 'Booking'
+                            : platform.name === 'Booking'
                             ? 'bg-amber-100 text-amber-700 border-2 border-amber-300'
                             : 'bg-rose-100 text-rose-700 border-2 border-rose-300'
                           : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 border-2 border-gray-100 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'
                       }`}
                     >
-                      {platform}
+                      {platform.name}
                     </button>
                   ))}
                 </div>

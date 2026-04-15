@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, Calendar, X, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { adminService } from '../services/adminService';
 
 export function SearchPage() {
   const navigate = useNavigate();
@@ -9,16 +10,44 @@ export function SearchPage() {
   const [dateFrom, setDateFrom] = useState('Jan 2024');
   const [dateTo, setDateTo] = useState('Dec 2024');
   const [selectedPeriod, setSelectedPeriod] = useState('6 months');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Google', 'Booking', 'Airbnb']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedSentiment, setSelectedSentiment] = useState<string[]>([]);
   const [minQuality, setMinQuality] = useState<number>(3);
   const [minSustainability, setMinSustainability] = useState<number>(0);
   const [sortBy, setSortBy] = useState('Quality');
 
-  const platforms = ['Google', 'Booking', 'Airbnb'];
-  const sentiments = ['Positive', 'Neutral', 'Negative'];
+  const [platforms, setPlatforms] = useState<string[]>(['Google', 'Booking', 'Airbnb']);
+  const [sentiments, setSentiments] = useState<string[]>(['Positive', 'Neutral', 'Negative']);
   const periods = ['30 days', '6 months', '12 months'];
   const sortOptions = ['Quality', 'Eco', 'Reviews'];
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadDynamicFilters() {
+      try {
+        const [activePlatforms, activeSentiments] = await Promise.all([
+          adminService.listPlatforms(true, controller.signal),
+          adminService.listSentiments(true, controller.signal),
+        ]);
+
+        const platformNames = activePlatforms.map((item) => item.name);
+        const sentimentNames = activeSentiments.map((item) => item.name);
+        if (platformNames.length > 0) {
+          setPlatforms(platformNames);
+          setSelectedPlatforms(platformNames);
+        }
+        if (sentimentNames.length > 0) {
+          setSentiments(sentimentNames);
+        }
+      } catch {
+        setSelectedPlatforms(['Google', 'Booking', 'Airbnb']);
+      }
+    }
+
+    loadDynamicFilters();
+    return () => controller.abort();
+  }, []);
 
   const togglePlatform = (platform: string) => {
     setSelectedPlatforms(prev => 

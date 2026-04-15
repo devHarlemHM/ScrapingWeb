@@ -14,4 +14,25 @@ export const apiEndpoints = {
   scrapping: {
     status: '/api/v1/scrapping/status',
   },
+  auth: {
+    login: '/api/v1/auth/login',
+  },
+  platforms: {
+    list: '/api/v1/platforms',
+    detail: (id: string) => `/api/v1/platforms/${id}`,
+    toggle: (id: string) => `/api/v1/platforms/${id}/toggle`,
+  },
+  sentiments: {
+    list: '/api/v1/sentiments',
+    detail: (id: string) => `/api/v1/sentiments/${id}`,
+    toggle: (id: string) => `/api/v1/sentiments/${id}/toggle`,
+  },
+  scrapings: {
+    list: '/api/v1/scrapings',
+    activate: (id: string) => `/api/v1/scrapings/${id}/activate`,
+  },
+  users: {
+    list: '/api/v1/users',
+    detail: (id: string) => `/api/v1/users/${id}`,
+  },
 } as const;
