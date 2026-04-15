@@ -15,7 +15,8 @@ class Resena(Base):
         sa.Index("ix_resenas_scrape_run", "scrape_run_id"),
         sa.Index("ix_resenas_fecha_publicacion", "fecha_publicacion"),
         sa.Index("ix_resenas_sentimiento", "sentimiento"),
-        sa.Index("ix_resenas_hash", "hash_unico", unique=True),
+        sa.Index("ix_resenas_hash", "hash_unico"),
+        sa.Index("uq_resenas_hash_run", "hash_unico", "scrape_run_id", unique=True),
     )
 
     id = sa.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -38,7 +39,7 @@ class Resena(Base):
     sentimiento = sa.Column(sa.String(20), nullable=True)
 
     payload_json = sa.Column(JSONB, nullable=False)
-    hash_unico = sa.Column(sa.String(64), nullable=False, unique=True)
+    hash_unico = sa.Column(sa.String(64), nullable=False)
     creado_en = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))
 
     hotel = relationship("Hotel", back_populates="resenas")

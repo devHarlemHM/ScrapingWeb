@@ -11,7 +11,8 @@ def log(message):
     print(f"[AIRBNB][{datetime.now().strftime('%H:%M:%S')}] {message}", flush=True)
 
 
-SAVE_PROGRESS_JSON = os.getenv("AIRBNB_SAVE_PROGRESS_JSON", "false").lower() == "true"
+# Progreso en JSON desactivado: los datos se cargan directamente a base de datos.
+SAVE_PROGRESS_JSON = False
 
 
 def cerrar_modal(page):
@@ -91,12 +92,14 @@ def limpiar_url(href):
     return parsed.path  # solo /rooms/ID
 
 
-def guardar_progreso(reseñas, pagina_actual):
-    """Guarda el progreso actual en caso de interrupciones"""
-    filename = f'reseñas_airbnb_barranquilla_progreso_p{pagina_actual}.json'
+def guardar_progreso(hotel_payload, pagina_actual, hotel_index):
+    """Guarda progreso por hotel (1 hotel por archivo)."""
+    filename = f"resenas_airbnb_progreso_p{pagina_actual}_h{hotel_index:03d}.json"
     with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(reseñas, f, ensure_ascii=False, indent=2)
-    print(f"💾 Progreso guardado: {len(reseñas)} reseñas en {filename}")
+        json.dump(hotel_payload, f, ensure_ascii=False, indent=2)
+
+    total_resenas = len(hotel_payload.get("reseñas", []))
+    print(f"💾 Progreso hotel guardado: pagina={pagina_actual}, hotel={hotel_index}, reseñas={total_resenas} en {filename}")
 
 
 def scroll_para_cargar_todos(page):
@@ -490,6 +493,10 @@ def extraer_datos_reseña(review, page, indice):
         comentario = "N/A"
         try:
             comment_selectors = [
+                "div.r1czmkpv span span.j1i3ej",
+                "div[class*='r1czmkpv'] span span[class*='j1i3ej']",
+                "span.j1i3ej",
+                "span[class*='j1i3ej']",
                 "span.l1h825yc", "span[dir='ltr']",
                 "div[data-testid*='review-content'] span", "p"
             ]
@@ -497,7 +504,7 @@ def extraer_datos_reseña(review, page, indice):
             comment_candidates = []
             for selector in comment_selectors:
                 comment_spans = review.locator(selector).all()
-                for span in comment_spans[:3]:  # Limitar búsqueda
+                for span in comment_spans[:8]:  # Limitar búsqueda
                     try:
                         text = span.inner_text(timeout=800).strip()
                         # Filtrar texto que parece ser comentario
@@ -507,6 +514,18 @@ def extraer_datos_reseña(review, page, indice):
                             comment_candidates.append(text)
                     except:
                         continue
+
+            # Fallback directo al bloque contenedor del comentario detectado por clases Airbnb.
+            if not comment_candidates:
+                try:
+                    for block in review.locator("div.r1czmkpv, div[class*='r1czmkpv']").all()[:3]:
+                        text = block.inner_text(timeout=800).strip()
+                        if (20 <= len(text) <= 2000 and
+                                not any(word in text.lower() for word in
+                                        ["estrellas", "años en", "año en", "estadía"] + meses)):
+                            comment_candidates.append(text)
+                except:
+                    pass
 
             if comment_candidates:
                 comentario = max(comment_candidates, key=len)
@@ -917,10 +936,11 @@ with sync_playwright() as p:
                 reseñas_alojamiento = extraer_reseñas_alojamiento(page)
 
                 # Agregar metadatos a cada reseña
+                room_id = path.split('/')[-1] if path else "N/A"
                 for reseña in reseñas_alojamiento:
                     reseña["url_alojamiento"] = url_completa
                     reseña["titulo_alojamiento"] = titulo_alojamiento
-                    reseña["room_id"] = path.split('/')[-1] if path else "N/A"
+                    reseña["room_id"] = room_id
 
                 todas_las_reseñas.extend(reseñas_alojamiento)
 
@@ -930,10 +950,22 @@ with sync_playwright() as p:
                     f"Resumen alojamiento {idx}/{len(hrefs_a_procesar)}: extraidas={len(reseñas_alojamiento)}, acumulado={len(todas_las_reseñas)}"
                 )
 
-                # Guardar progreso cada 5 alojamientos (más frecuente)
-                if SAVE_PROGRESS_JSON and idx % 5 == 0:
-                    guardar_progreso(todas_las_reseñas, pagina)
-                    log(f"Progreso guardado automatico en pagina {pagina}: total={len(todas_las_reseñas)}")
+                # Guardar progreso por hotel (1 hotel por JSON)
+                if SAVE_PROGRESS_JSON:
+                    hotel_payload = {
+                        "pagina": pagina,
+                        "hotel_index": idx,
+                        "room_id": room_id,
+                        "titulo_alojamiento": titulo_alojamiento,
+                        "url_alojamiento": url_completa,
+                        "total_reseñas": len(reseñas_alojamiento),
+                        "reseñas": reseñas_alojamiento,
+                    }
+                    guardar_progreso(hotel_payload, pagina, idx)
+                    log(
+                        f"Progreso por hotel guardado | pagina={pagina} | hotel={idx} | "
+                        f"reseñas={len(reseñas_alojamiento)}"
+                    )
 
                 # Volver a la lista
                 page.go_back(timeout=10000)

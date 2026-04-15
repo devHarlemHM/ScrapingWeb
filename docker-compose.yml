@@ -56,6 +56,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-scrapingweb}
       # Python
       PYTHONUNBUFFERED: "1"
+      # Scheduler (scrapping)
+      SCRAPPING_SCHEDULE_DAY: "sun"
+      SCRAPPING_SCHEDULE_HOUR: "22"
+      SCRAPPING_SCHEDULE_MINUTE: "0"
+      SCRAPPING_SCHEDULE_TIMEZONE: "America/Bogota"
+      SCRAPPING_RUN_ON_STARTUP: "false"
     depends_on:
       db:
         condition: service_healthy

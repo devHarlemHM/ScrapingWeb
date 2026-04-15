@@ -47,6 +47,7 @@ class ReviewOut(BaseModel):
     id: str
     author: str | None = None
     platform: str
+    scrape_run_id: str | None = None
     rating: float | None = None
     date: datetime | None = None
     text: str | None = None
@@ -61,6 +62,7 @@ class HotelDetailOut(HotelListItemOut):
 
 class HotelReviewsOut(BaseModel):
     hotel_id: str
+    effective_scrape_run_id: str | None = None
     total: int
     reviews: list[ReviewOut]
 

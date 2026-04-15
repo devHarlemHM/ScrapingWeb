@@ -39,3 +39,14 @@ def ensure_runtime_schema() -> None:
                 """
             )
         )
+        connection.execute(text("ALTER TABLE resenas DROP CONSTRAINT IF EXISTS resenas_hash_unico_key"))
+        connection.execute(text("DROP INDEX IF EXISTS ix_resenas_hash"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_resenas_hash ON resenas (hash_unico)"))
+        connection.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_resenas_hash_run
+                ON resenas (hash_unico, scrape_run_id)
+                """
+            )
+        )

@@ -38,6 +38,7 @@ def hotels_list(
     min_sustainability: float | None = Query(default=None),
     sentiment: str | None = Query(default=None),
     platforms: str | None = Query(default=None),
+    scrape_run_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[HotelListItemOut]:
     platform_list = [p.strip() for p in platforms.split(",")] if platforms else None
@@ -56,6 +57,7 @@ def hotels_list(
         min_sustainability=min_sustainability,
         sentiment=sentiment,
         platforms=platform_list,
+        scrape_run_id=scrape_run_id,
     )
     return [HotelListItemOut(**row) for row in rows]
 
@@ -70,6 +72,7 @@ def hotels_advanced_search(
     rating_star: int | None = Query(default=None, ge=1, le=5),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
+    scrape_run_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[HotelListItemOut]:
     if date_from and date_to and date_from > date_to:
@@ -90,13 +93,18 @@ def hotels_advanced_search(
         rating_star=rating_star,
         date_from=start_dt,
         date_to=end_dt,
+        scrape_run_id=scrape_run_id,
     )
     return [HotelListItemOut(**row) for row in rows]
 
 
 @router.get("/{hotel_id}", response_model=HotelDetailOut)
-def hotel_detail(hotel_id: str, db: Session = Depends(get_db)) -> HotelDetailOut:
-    payload = get_hotel_detail(db, hotel_id)
+def hotel_detail(
+    hotel_id: str,
+    scrape_run_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> HotelDetailOut:
+    payload = get_hotel_detail(db, hotel_id, scrape_run_id=scrape_run_id)
     if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
     return HotelDetailOut(**payload)
@@ -109,6 +117,7 @@ def hotel_reviews(
     sentiment: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    scrape_run_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> HotelReviewsOut:
     payload = get_hotel_reviews(
@@ -118,6 +127,7 @@ def hotel_reviews(
         sentiment=sentiment,
         limit=limit,
         offset=offset,
+        scrape_run_id=scrape_run_id,
     )
     if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
@@ -125,8 +135,12 @@ def hotel_reviews(
 
 
 @router.get("/{hotel_id}/analytics", response_model=HotelAnalyticsOut)
-def hotel_analytics(hotel_id: str, db: Session = Depends(get_db)) -> HotelAnalyticsOut:
-    payload = get_hotel_analytics(db, hotel_id)
+def hotel_analytics(
+    hotel_id: str,
+    scrape_run_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> HotelAnalyticsOut:
+    payload = get_hotel_analytics(db, hotel_id, scrape_run_id=scrape_run_id)
     if not payload:
         raise HTTPException(status_code=404, detail="Hotel no encontrado")
     return HotelAnalyticsOut(**payload)

@@ -476,9 +476,17 @@ def _sentiment_from_review(item: ReviewInput) -> str:
     return "neutral"
 
 
-def _hash_review(source: str, hotel_name: str, author: str | None, date_raw: str | None, text: str) -> str:
+def _hash_review(
+    run_id: UUID,
+    source: str,
+    hotel_name: str,
+    author: str | None,
+    date_raw: str | None,
+    text: str,
+) -> str:
     payload = "|".join(
         [
+            str(run_id),
             _normalize_text(source),
             _normalize_text(hotel_name),
             _normalize_text(author),
@@ -652,7 +660,7 @@ def _upsert_hotel(db: Session, cache: dict[str, Hotel], review: ReviewInput) -> 
     return hotel
 
 
-def _refresh_hotel_metrics(db: Session) -> None:
+def _refresh_hotel_metrics(db: Session, run_id: UUID) -> None:
     hotels = db.query(Hotel).all()
     for hotel in hotels:
         stats = (
@@ -661,7 +669,7 @@ def _refresh_hotel_metrics(db: Session) -> None:
                 func.count(Resena.id),
                 func.sum(case((func.lower(Resena.sentimiento) == "positive", 1), else_=0)),
             )
-            .filter(Resena.hotel_id == hotel.id)
+            .filter(Resena.hotel_id == hotel.id, Resena.scrape_run_id == run_id)
             .one()
         )
 
@@ -684,15 +692,14 @@ def migrate_json_to_db(db: Session, run_id: UUID) -> dict[str, int]:
 
     fuentes = _seed_sources(db)
 
-    # Replace strategy: keep only latest complete snapshot.
-    db.query(Resena).delete(synchronize_session=False)
-    db.query(Hotel).delete(synchronize_session=False)
-    db.flush()
-
-    hotel_cache: dict[str, Hotel] = {}
+    hotel_cache: dict[str, Hotel] = {
+        _normalize_text(hotel.nombre): hotel
+        for hotel in db.query(Hotel).all()
+    }
     inserted_reviews = 0
     skipped_duplicates = 0
     seen_hashes: set[str] = set()
+    processed_hotel_keys: set[str] = set()
 
     all_reviews: list[ReviewInput] = []
     all_reviews.extend(_extract_google_reviews(_load_json(json_files["google"])))
@@ -701,8 +708,16 @@ def migrate_json_to_db(db: Session, run_id: UUID) -> dict[str, int]:
 
     for item in all_reviews:
         hotel = _upsert_hotel(db, hotel_cache, item)
+        processed_hotel_keys.add(_normalize_text(item.hotel_name))
         text_for_hash = item.review_text or item.positive_text or item.negative_text or ""
-        hash_value = _hash_review(item.source_code, item.hotel_name, item.author, item.date_raw, text_for_hash)
+        hash_value = _hash_review(
+            run_id=run_id,
+            source=item.source_code,
+            hotel_name=item.hotel_name,
+            author=item.author,
+            date_raw=item.date_raw,
+            text=text_for_hash,
+        )
 
         if hash_value in seen_hashes:
             skipped_duplicates += 1
@@ -731,10 +746,10 @@ def migrate_json_to_db(db: Session, run_id: UUID) -> dict[str, int]:
         db.add(review)
         inserted_reviews += 1
 
-    _refresh_hotel_metrics(db)
+    _refresh_hotel_metrics(db, run_id)
 
     return {
-        "hotels": len(hotel_cache),
+        "hotels": len(processed_hotel_keys),
         "reviews": inserted_reviews,
         "sources": len(fuentes),
         "duplicates_skipped": skipped_duplicates,

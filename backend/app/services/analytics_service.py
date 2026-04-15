@@ -4,13 +4,15 @@ from datetime import UTC, datetime
 from collections.abc import Iterable
 import re
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import bindparam, case, func, text
+from sqlalchemy import and_, bindparam, case, func, text
 from sqlalchemy.orm import Session
 
 from app.models.fuente import Fuente
 from app.models.hotel import Hotel
 from app.models.resena import Resena
+from app.models.scrape_run import ScrapeRun
 
 
 def _sentiments_from_counts(pos: int, neu: int, neg: int) -> dict[str, int]:
@@ -144,13 +146,59 @@ def _is_generic_hotel_description(value: str | None) -> bool:
     return normalized in _GENERIC_HOTEL_DESCRIPTIONS
 
 
-def get_dashboard_summary(db: Session) -> dict[str, Any]:
-    total_reviews = db.query(func.count(Resena.id)).scalar() or 0
+def _latest_completed_run_id(db: Session) -> UUID | None:
+    latest_completed = (
+        db.query(ScrapeRun.id)
+        .filter(ScrapeRun.estado == "completed")
+        .order_by(ScrapeRun.iniciado_en.desc())
+        .first()
+    )
+    return latest_completed[0] if latest_completed else None
+
+
+def _resolve_effective_scrape_run_id(db: Session, requested_scrape_run_id: str | None) -> UUID | None:
+    latest_completed_id = _latest_completed_run_id(db)
+    if not requested_scrape_run_id:
+        return latest_completed_id
+
+    try:
+        requested_uuid = UUID(str(requested_scrape_run_id))
+    except (TypeError, ValueError):
+        return latest_completed_id
+
+    requested_run = db.query(ScrapeRun).filter(ScrapeRun.id == requested_uuid).first()
+    if not requested_run:
+        return latest_completed_id
+
+    if requested_run.estado == "completed":
+        return requested_run.id
+
+    fallback_previous_completed = (
+        db.query(ScrapeRun.id)
+        .filter(ScrapeRun.estado == "completed", ScrapeRun.iniciado_en < requested_run.iniciado_en)
+        .order_by(ScrapeRun.iniciado_en.desc())
+        .first()
+    )
+    if fallback_previous_completed:
+        return fallback_previous_completed[0]
+
+    return latest_completed_id
+
+
+def get_dashboard_summary(db: Session, scrape_run_id: str | None = None) -> dict[str, Any]:
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+
+    total_reviews_query = db.query(func.count(Resena.id))
+    if effective_run_id:
+        total_reviews_query = total_reviews_query.filter(Resena.scrape_run_id == effective_run_id)
+    total_reviews = total_reviews_query.scalar() or 0
+
     total_platforms = db.query(func.count(Fuente.id)).filter(Fuente.activo.is_(True)).scalar() or 0
 
-    positive_reviews = (
-        db.query(func.count(Resena.id)).filter(func.lower(func.coalesce(Resena.sentimiento, "")) == "positive").scalar() or 0
-    )
+    positive_reviews_query = db.query(func.count(Resena.id)).filter(func.lower(func.coalesce(Resena.sentimiento, "")) == "positive")
+    if effective_run_id:
+        positive_reviews_query = positive_reviews_query.filter(Resena.scrape_run_id == effective_run_id)
+    positive_reviews = positive_reviews_query.scalar() or 0
 
     # Proxy for IA precision while no external labeled benchmark exists.
     ia_precision = _safe_pct(positive_reviews, total_reviews) if total_reviews else 0.0
@@ -164,28 +212,46 @@ def get_dashboard_summary(db: Session) -> dict[str, Any]:
     }
 
 
-def get_dashboard_categories(db: Session) -> list[dict[str, Any]]:
-    base_total = db.query(func.count(Hotel.id)).filter(Hotel.activo.is_(True)).scalar() or 0
+def get_dashboard_categories(db: Session, scrape_run_id: str | None = None) -> list[dict[str, Any]]:
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
 
-    high_sustainability = (
-        db.query(func.count(Hotel.id))
-        .filter(Hotel.activo.is_(True), func.coalesce(Hotel.sostenibilidad_score, 0) >= 4)
-        .scalar()
-        or 0
-    )
-    high_quality = (
-        db.query(func.count(Hotel.id))
-        .filter(Hotel.activo.is_(True), func.coalesce(Hotel.calidad_score, 0) >= 4)
-        .scalar()
-        or 0
+    positive_count = func.coalesce(
+        func.sum(case((func.lower(func.coalesce(Resena.sentimiento, "")) == "positive", 1), else_=0)),
+        0,
     )
 
-    positive_hotels = (
-        db.query(func.count(func.distinct(Resena.hotel_id)))
-        .filter(func.lower(func.coalesce(Resena.sentimiento, "")) == "positive")
-        .scalar()
-        or 0
+    hotel_stats_query = (
+        db.query(
+            Resena.hotel_id.label("hotel_id"),
+            func.avg(Resena.rating_score_5).label("avg_rating"),
+            func.count(Resena.id).label("total_reviews"),
+            positive_count.label("positive_reviews"),
+        )
+        .join(Hotel, Hotel.id == Resena.hotel_id)
+        .filter(Hotel.activo.is_(True))
+        .group_by(Resena.hotel_id)
     )
+    if effective_run_id:
+        hotel_stats_query = hotel_stats_query.filter(Resena.scrape_run_id == effective_run_id)
+
+    hotel_stats = hotel_stats_query.all()
+    base_total = len(hotel_stats)
+
+    high_quality = 0
+    high_sustainability = 0
+    positive_hotels = 0
+    for row in hotel_stats:
+        avg_rating = float(row.avg_rating) if row.avg_rating is not None else 0.0
+        total_reviews = int(row.total_reviews or 0)
+        positive_reviews = int(row.positive_reviews or 0)
+        sustainability_score = (positive_reviews / total_reviews) * 5.0 if total_reviews > 0 else 0.0
+
+        if avg_rating >= 4.0:
+            high_quality += 1
+        if sustainability_score >= 4.0:
+            high_sustainability += 1
+        if positive_reviews > 0:
+            positive_hotels += 1
 
     return [
         {
@@ -363,16 +429,22 @@ def _extract_keywords(texts: list[str], limit: int = 5) -> list[str]:
     return [token.capitalize() for token, _ in top]
 
 
-def _review_texts_for_hotels(db: Session, hotel_ids: list[Any], per_hotel_limit: int = 8) -> dict[Any, list[str]]:
+def _review_texts_for_hotels(
+    db: Session,
+    hotel_ids: list[Any],
+    per_hotel_limit: int = 8,
+    effective_run_id: UUID | None = None,
+) -> dict[Any, list[str]]:
     if not hotel_ids:
         return {}
 
-    rows = (
-        db.query(Resena.hotel_id, Resena.resena_texto)
-        .filter(Resena.hotel_id.in_(hotel_ids), Resena.resena_texto.isnot(None))
-        .order_by(Resena.hotel_id.asc(), Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc())
-        .all()
+    rows_query = db.query(Resena.hotel_id, Resena.resena_texto).filter(
+        Resena.hotel_id.in_(hotel_ids), Resena.resena_texto.isnot(None)
     )
+    if effective_run_id:
+        rows_query = rows_query.filter(Resena.scrape_run_id == effective_run_id)
+
+    rows = rows_query.order_by(Resena.hotel_id.asc(), Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc()).all()
 
     out: dict[Any, list[str]] = {hotel_id: [] for hotel_id in hotel_ids}
     for hotel_id, review_text in rows:
@@ -451,26 +523,36 @@ def _sentiments_payload(rows: Iterable[tuple[str | None, int]]) -> dict[str, int
     return payload
 
 
-def _build_hotel_payload(db: Session, hotel: Hotel) -> dict[str, Any]:
-    rating_rows = (
+def _build_hotel_payload(db: Session, hotel: Hotel, effective_run_id: UUID | None = None) -> dict[str, Any]:
+    rating_rows_query = (
         db.query(Fuente.codigo, func.avg(Resena.rating_score_5))
         .join(Resena, Resena.fuente_id == Fuente.id)
         .filter(Resena.hotel_id == hotel.id)
-        .group_by(Fuente.codigo)
-        .all()
     )
+    if effective_run_id:
+        rating_rows_query = rating_rows_query.filter(Resena.scrape_run_id == effective_run_id)
+    rating_rows = rating_rows_query.group_by(Fuente.codigo).all()
 
-    sentiment_rows = (
+    sentiment_rows_query = (
         db.query(func.lower(Resena.sentimiento), func.count(Resena.id))
         .filter(Resena.hotel_id == hotel.id)
-        .group_by(func.lower(Resena.sentimiento))
-        .all()
     )
+    if effective_run_id:
+        sentiment_rows_query = sentiment_rows_query.filter(Resena.scrape_run_id == effective_run_id)
+    sentiment_rows = sentiment_rows_query.group_by(func.lower(Resena.sentimiento)).all()
 
-    total_reviews = db.query(func.count(Resena.id)).filter(Resena.hotel_id == hotel.id).scalar() or 0
+    total_reviews_query = db.query(func.count(Resena.id)).filter(Resena.hotel_id == hotel.id)
+    avg_rating_query = db.query(func.avg(Resena.rating_score_5)).filter(Resena.hotel_id == hotel.id)
+    if effective_run_id:
+        total_reviews_query = total_reviews_query.filter(Resena.scrape_run_id == effective_run_id)
+        avg_rating_query = avg_rating_query.filter(Resena.scrape_run_id == effective_run_id)
+
+    total_reviews = total_reviews_query.scalar() or 0
+    avg_rating_value = avg_rating_query.scalar()
     sentiments = _sentiments_payload(sentiment_rows)
 
     sentiment_score = _safe_pct(sentiments["positive"], int(total_reviews)) if total_reviews else 0.0
+    sustainability_score = round((sentiments["positive"] / total_reviews) * 5.0, 2) if total_reviews else None
 
     return {
         "id": str(hotel.id),
@@ -478,12 +560,12 @@ def _build_hotel_payload(db: Session, hotel: Hotel) -> dict[str, Any]:
         "location": hotel.ubicacion,
         "city": hotel.ciudad,
         "country": hotel.pais,
-        "rating": round(float(hotel.rating_promedio), 2) if hotel.rating_promedio is not None else None,
+        "rating": round(float(avg_rating_value), 2) if avg_rating_value is not None else None,
         "price_per_night": float(hotel.precio_noche) if hotel.precio_noche is not None else None,
         "total_reviews": int(total_reviews),
         "sentiment_score": sentiment_score,
-        "quality_score": float(hotel.calidad_score) if hotel.calidad_score is not None else None,
-        "sustainability_score": float(hotel.sostenibilidad_score) if hotel.sostenibilidad_score is not None else None,
+        "quality_score": round(float(avg_rating_value), 2) if avg_rating_value is not None else None,
+        "sustainability_score": sustainability_score,
         "platforms": _platform_payload(rating_rows),
         "sentiments": sentiments,
         "features": hotel.features_json or [],
@@ -492,17 +574,22 @@ def _build_hotel_payload(db: Session, hotel: Hotel) -> dict[str, Any]:
     }
 
 
-def _platforms_for_hotels(db: Session, hotel_ids: list[Any]) -> dict[Any, dict[str, int]]:
+def _platforms_for_hotels(
+    db: Session,
+    hotel_ids: list[Any],
+    effective_run_id: UUID | None = None,
+) -> dict[Any, dict[str, int]]:
     if not hotel_ids:
         return {}
 
-    rows = (
+    rows_query = (
         db.query(Resena.hotel_id, func.lower(Fuente.codigo), func.count(Resena.id))
         .join(Fuente, Fuente.id == Resena.fuente_id)
         .filter(Resena.hotel_id.in_(hotel_ids))
-        .group_by(Resena.hotel_id, func.lower(Fuente.codigo))
-        .all()
     )
+    if effective_run_id:
+        rows_query = rows_query.filter(Resena.scrape_run_id == effective_run_id)
+    rows = rows_query.group_by(Resena.hotel_id, func.lower(Fuente.codigo)).all()
 
     payload: dict[Any, dict[str, int]] = {
         hotel_id: {"google": 0, "booking": 0, "airbnb": 0} for hotel_id in hotel_ids
@@ -529,7 +616,10 @@ def list_hotels(
     min_sustainability: float | None,
     sentiment: str | None,
     platforms: list[str] | None,
+    scrape_run_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+
     positive_count = func.coalesce(
         func.sum(case((func.lower(func.coalesce(Resena.sentimiento, "")) == "positive", 1), else_=0)),
         0,
@@ -544,11 +634,20 @@ def list_hotels(
     )
     total_reviews = func.coalesce(func.count(Resena.id), 0)
     avg_review_rating = func.avg(Resena.rating_score_5)
-    effective_rating_expr = func.coalesce(func.nullif(Hotel.rating_promedio, 0), avg_review_rating, 3.0)
+    effective_rating_expr = func.coalesce(avg_review_rating, 3.0)
+    quality_score_expr = func.coalesce(avg_review_rating, 0.0)
+    sustainability_score_expr = case(
+        (total_reviews > 0, (positive_count * 5.0) / total_reviews),
+        else_=0.0,
+    )
     sentiment_score_expr = case(
         (total_reviews > 0, (positive_count * 100.0) / total_reviews),
         else_=0.0,
     )
+
+    resena_join_condition = Resena.hotel_id == Hotel.id
+    if effective_run_id:
+        resena_join_condition = and_(resena_join_condition, Resena.scrape_run_id == effective_run_id)
 
     hotels_query = (
         db.query(
@@ -559,8 +658,10 @@ def list_hotels(
             negative_count.label("negative_reviews"),
             sentiment_score_expr.label("sentiment_score"),
             effective_rating_expr.label("effective_rating"),
+            quality_score_expr.label("quality_score"),
+            sustainability_score_expr.label("sustainability_score"),
         )
-        .outerjoin(Resena, Resena.hotel_id == Hotel.id)
+        .outerjoin(Resena, resena_join_condition)
         .filter(Hotel.activo.is_(True))
         .group_by(Hotel.id)
     )
@@ -578,9 +679,9 @@ def list_hotels(
     if min_rating is not None:
         hotels_query = hotels_query.having(effective_rating_expr >= min_rating)
     if min_quality is not None:
-        hotels_query = hotels_query.filter(Hotel.calidad_score >= min_quality)
+        hotels_query = hotels_query.having(quality_score_expr >= min_quality)
     if min_sustainability is not None:
-        hotels_query = hotels_query.filter(Hotel.sostenibilidad_score >= min_sustainability)
+        hotels_query = hotels_query.having(sustainability_score_expr >= min_sustainability)
     if min_reviews is not None:
         hotels_query = hotels_query.having(total_reviews >= min_reviews)
 
@@ -603,6 +704,17 @@ def list_hotels(
                 .filter(Resena.hotel_id == Hotel.id, func.lower(Fuente.codigo).in_(wanted_platforms))
                 .exists()
             )
+            if effective_run_id:
+                platform_exists = (
+                    db.query(Resena.id)
+                    .join(Fuente, Fuente.id == Resena.fuente_id)
+                    .filter(
+                        Resena.hotel_id == Hotel.id,
+                        Resena.scrape_run_id == effective_run_id,
+                        func.lower(Fuente.codigo).in_(wanted_platforms),
+                    )
+                    .exists()
+                )
             hotels_query = hotels_query.filter(platform_exists)
 
     sentiment_component = sentiment_score_expr / 20.0
@@ -618,21 +730,21 @@ def list_hotels(
     elif sort == "reviews":
         hotels_query = hotels_query.order_by(total_reviews.desc(), Hotel.nombre.asc())
     elif sort == "quality":
-        hotels_query = hotels_query.order_by(func.coalesce(Hotel.calidad_score, 0).desc(), Hotel.nombre.asc())
+        hotels_query = hotels_query.order_by(quality_score_expr.desc(), Hotel.nombre.asc())
     elif sort == "sustainability":
-        hotels_query = hotels_query.order_by(func.coalesce(Hotel.sostenibilidad_score, 0).desc(), Hotel.nombre.asc())
+        hotels_query = hotels_query.order_by(sustainability_score_expr.desc(), Hotel.nombre.asc())
     elif sort == "balance":
         balance_score = (
-            func.coalesce(Hotel.calidad_score, 0) * 0.4
-            + func.coalesce(Hotel.sostenibilidad_score, 0) * 0.3
+            quality_score_expr * 0.4
+            + sustainability_score_expr * 0.3
             + effective_rating_expr * 0.2
             + sentiment_component * 0.1
         )
         hotels_query = hotels_query.order_by(balance_score.desc(), Hotel.nombre.asc())
     elif sort == "worst-balance":
         balance_score = (
-            func.coalesce(Hotel.calidad_score, 0) * 0.4
-            + func.coalesce(Hotel.sostenibilidad_score, 0) * 0.3
+            quality_score_expr * 0.4
+            + sustainability_score_expr * 0.3
             + effective_rating_expr * 0.2
             + sentiment_component * 0.1
         )
@@ -648,12 +760,12 @@ def list_hotels(
     rows = hotels_query.offset(offset).limit(limit).all()
 
     hotel_ids = [hotel.id for hotel, *_ in rows]
-    platform_by_hotel = _platforms_for_hotels(db, hotel_ids)
+    platform_by_hotel = _platforms_for_hotels(db, hotel_ids, effective_run_id=effective_run_id)
     links_by_hotel = _platform_links_for_hotels(db, hotel_ids)
-    review_texts_by_hotel = _review_texts_for_hotels(db, hotel_ids)
+    review_texts_by_hotel = _review_texts_for_hotels(db, hotel_ids, effective_run_id=effective_run_id)
 
     payload: list[dict[str, Any]] = []
-    for hotel, reviews_count, pos_count, neu_count, neg_count, sentiment_score, effective_rating in rows:
+    for hotel, reviews_count, pos_count, neu_count, neg_count, sentiment_score, effective_rating, quality_score, sustainability_score in rows:
         review_texts = review_texts_by_hotel.get(hotel.id, [])
         features = hotel.features_json or _extract_keywords(review_texts, limit=5)
 
@@ -689,8 +801,8 @@ def list_hotels(
                 "price_per_night": float(hotel.precio_noche) if hotel.precio_noche is not None else None,
                 "total_reviews": int(reviews_count or 0),
                 "sentiment_score": round(float(sentiment_score or 0), 2),
-                "quality_score": float(hotel.calidad_score) if hotel.calidad_score is not None else None,
-                "sustainability_score": float(hotel.sostenibilidad_score) if hotel.sostenibilidad_score is not None else None,
+                "quality_score": round(float(quality_score or 0), 2),
+                "sustainability_score": round(float(sustainability_score or 0), 2),
                 "favorites_count": int(hotel.favorites_count or 0),
                 "platforms": platform_by_hotel.get(
                     hotel.id,
@@ -722,7 +834,10 @@ def list_hotels_advanced(
     rating_star: int | None,
     date_from: datetime | None,
     date_to: datetime | None,
+    scrape_run_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+
     wanted_platforms = {p.lower().strip() for p in (platforms or []) if p and p.strip()}
     wanted_sentiment = (sentiment or "").strip().lower()
     if wanted_sentiment not in {"positive", "neutral", "negative"}:
@@ -755,6 +870,9 @@ def list_hotels_advanced(
         .join(Fuente, Fuente.id == Resena.fuente_id)
         .group_by(Resena.hotel_id)
     )
+
+    if effective_run_id:
+        grouped_reviews = grouped_reviews.filter(Resena.scrape_run_id == effective_run_id)
 
     if wanted_platforms:
         grouped_reviews = grouped_reviews.filter(func.lower(Fuente.codigo).in_(wanted_platforms))
@@ -819,6 +937,9 @@ def list_hotels_advanced(
             .filter(Resena.hotel_id.in_(hotel_ids))
         )
 
+        if effective_run_id:
+            platform_counts_query = platform_counts_query.filter(Resena.scrape_run_id == effective_run_id)
+
         if wanted_platforms:
             platform_counts_query = platform_counts_query.filter(func.lower(Fuente.codigo).in_(wanted_platforms))
 
@@ -850,6 +971,9 @@ def list_hotels_advanced(
             .filter(Resena.hotel_id.in_(hotel_ids))
             .order_by(Resena.hotel_id.asc(), Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc())
         )
+
+        if effective_run_id:
+            texts_query = texts_query.filter(Resena.scrape_run_id == effective_run_id)
 
         if wanted_platforms:
             texts_query = texts_query.filter(func.lower(Fuente.codigo).in_(wanted_platforms))
@@ -910,8 +1034,10 @@ def list_hotels_advanced(
                 "price_per_night": float(hotel.precio_noche) if hotel.precio_noche is not None else None,
                 "total_reviews": int(reviews_count or 0),
                 "sentiment_score": round(float(sentiment_score or 0), 2),
-                "quality_score": float(hotel.calidad_score) if hotel.calidad_score is not None else None,
-                "sustainability_score": float(hotel.sostenibilidad_score) if hotel.sostenibilidad_score is not None else None,
+                "quality_score": round(float(effective_rating or 0), 2),
+                "sustainability_score": round((float(pos_count or 0) / float(reviews_count or 1)) * 5.0, 2)
+                if reviews_count
+                else 0.0,
                 "favorites_count": int(hotel.favorites_count or 0),
                 "platforms": filtered_platform_counts.get(
                     hotel.id,
@@ -933,20 +1059,24 @@ def list_hotels_advanced(
     return payload
 
 
-def get_hotel_detail(db: Session, hotel_id: str) -> dict[str, Any] | None:
+def get_hotel_detail(db: Session, hotel_id: str, scrape_run_id: str | None = None) -> dict[str, Any] | None:
     hotel = db.query(Hotel).filter(Hotel.id == hotel_id, Hotel.activo.is_(True)).first()
     if not hotel:
         return None
 
-    base = _build_hotel_payload(db, hotel)
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+    base = _build_hotel_payload(db, hotel, effective_run_id=effective_run_id)
 
-    recent_reviews_rows = (
+    recent_reviews_query = (
         db.query(Resena, Fuente.codigo)
         .join(Fuente, Fuente.id == Resena.fuente_id)
         .filter(Resena.hotel_id == hotel.id)
-        .order_by(Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc())
-        .limit(250)
-        .all()
+    )
+    if effective_run_id:
+        recent_reviews_query = recent_reviews_query.filter(Resena.scrape_run_id == effective_run_id)
+
+    recent_reviews_rows = (
+        recent_reviews_query.order_by(Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc()).limit(250).all()
     )
 
     cleaned_recent_reviews: list[dict[str, Any]] = []
@@ -1031,18 +1161,22 @@ def _topic_analysis(rows: list[tuple[str, str | None]]) -> list[dict[str, Any]]:
     return payload
 
 
-def get_hotel_analytics(db: Session, hotel_id: str) -> dict[str, Any] | None:
+def get_hotel_analytics(db: Session, hotel_id: str, scrape_run_id: str | None = None) -> dict[str, Any] | None:
     hotel = db.query(Hotel).filter(Hotel.id == hotel_id, Hotel.activo.is_(True)).first()
     if not hotel:
         return None
 
-    rows = (
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+
+    rows_query = (
         db.query(Resena, Fuente.codigo)
         .join(Fuente, Fuente.id == Resena.fuente_id)
         .filter(Resena.hotel_id == hotel.id)
-        .order_by(Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc())
-        .all()
     )
+    if effective_run_id:
+        rows_query = rows_query.filter(Resena.scrape_run_id == effective_run_id)
+
+    rows = rows_query.order_by(Resena.fecha_publicacion.desc().nullslast(), Resena.creado_en.desc()).all()
 
     cleaned_reviews: list[dict[str, Any]] = []
     for review, source_code in rows:
@@ -1174,12 +1308,17 @@ def get_hotel_reviews(
     sentiment: str | None,
     limit: int,
     offset: int,
+    scrape_run_id: str | None = None,
 ) -> dict[str, Any] | None:
+    effective_run_id = _resolve_effective_scrape_run_id(db, scrape_run_id)
+
     hotel_exists = db.query(func.count(Hotel.id)).filter(Hotel.id == hotel_id, Hotel.activo.is_(True)).scalar()
     if not hotel_exists:
         return None
 
     query = db.query(Resena, Fuente.codigo).join(Fuente, Fuente.id == Resena.fuente_id).filter(Resena.hotel_id == hotel_id)
+    if effective_run_id:
+        query = query.filter(Resena.scrape_run_id == effective_run_id)
 
     if platform:
         query = query.filter(func.lower(Fuente.codigo) == platform.lower())
@@ -1200,6 +1339,7 @@ def get_hotel_reviews(
                 "id": str(review.id),
                 "author": review.autor,
                 "platform": source_code,
+                "scrape_run_id": str(review.scrape_run_id) if review.scrape_run_id else None,
                 "rating": float(review.rating_score_5) if review.rating_score_5 is not None else None,
                 "date": review.fecha_publicacion,
                 "text": text_value,
@@ -1214,6 +1354,7 @@ def get_hotel_reviews(
 
     return {
         "hotel_id": str(hotel_id),
+        "effective_scrape_run_id": str(effective_run_id) if effective_run_id else None,
         "total": int(total),
         "reviews": reviews,
     }
