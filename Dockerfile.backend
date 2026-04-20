@@ -42,7 +42,7 @@ COPY backend/ .
 RUN mkdir -p exports alembic/versions
 
 # Exponer puerto
-EXPOSE 8000
+EXPOSE 8010
 
 # Script de inicio
 COPY docker-entrypoint.sh /docker-entrypoint.sh
@@ -51,4 +51,4 @@ RUN tr -d '\r' < /docker-entrypoint.sh > /tmp/docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh
 
 # Comando por defecto (puede ser sobrescrito)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
