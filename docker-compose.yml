@@ -15,11 +15,7 @@ services:
     restart: "no"
     command: ["postgres", "-p", "5433"]
     ports:
-<<<<<<< HEAD
-      - "5433:5433"
-=======
       - "5434:5432"
->>>>>>> 83b949e91bd472d3fb7d307e2a89f98e7b7eb323
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
