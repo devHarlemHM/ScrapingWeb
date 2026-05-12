@@ -14,7 +14,7 @@ services:
     image: postgres:16-alpine
     restart: "no"
     ports:
-      - "5432:5432"
+      - "5434:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -80,14 +80,13 @@ services:
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8010}
     restart: "no"
     ports:
-      - "3000:80"
+      - "3001:80"
     volumes:
       # Código fuente montado para hot-reload
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
     environment:
       NODE_ENV: production
-      PORT: "3000"
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8010}
     depends_on:
       - backend
