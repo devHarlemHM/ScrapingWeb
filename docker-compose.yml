@@ -131,3 +131,8 @@ networks:
   scrapingweb_network:
     name: scrapingweb_network
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${DOCKER_NETWORK_SUBNET:-172.35.0.0/24}
+          gateway: ${DOCKER_NETWORK_GATEWAY:-172.35.0.1}
