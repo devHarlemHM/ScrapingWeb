@@ -3,6 +3,23 @@ const API_BASE_URL =
   (import.meta.env.DEV ? 'http://localhost:8010' : '/api');
 const AUTH_STORAGE_KEY = 'hotelens.auth';
 
+function buildApiUrl(path: string): string {
+  if (!API_BASE_URL) {
+    return path;
+  }
+
+  const normalizedBase = API_BASE_URL.endsWith('/')
+    ? API_BASE_URL.slice(0, -1)
+    : API_BASE_URL;
+
+  // Avoid /api/api/... when base is /api and endpoint already includes /api
+  if (path.startsWith('/api/') && normalizedBase.endsWith('/api')) {
+    return path;
+  }
+
+  return `${normalizedBase}${path}`;
+}
+
 export class ApiError extends Error {
   public readonly status: number;
 
@@ -18,7 +35,7 @@ interface RequestOptions extends RequestInit {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = buildApiUrl(path);
   let accessToken: string | null = null;
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
