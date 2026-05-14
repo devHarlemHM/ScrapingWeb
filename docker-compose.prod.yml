@@ -1,0 +1,19 @@
+services:
+  db:
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]
+    volumes:
+      - ./backend/exports:/app/exports
+
+  frontend:
+    restart: unless-stopped
+    volumes: []
+
+  pgadmin:
+    restart: unless-stopped
+    profiles: ["admin"]
+    ports:
+      - "127.0.0.1:5050:80"
