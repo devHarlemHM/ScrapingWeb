@@ -252,15 +252,19 @@ JSON canonicos esperados:
 
 - `VITE_API_BASE_URL`
 
-Si corre en Docker, Nginx tambien hace proxy de `/api/` a `backend:8000`.
+Si corre en Docker, Nginx tambien hace proxy de `/api/` a `backend:8010`.
 
 ## 6. Infraestructura con Docker
 
-Servicios definidos en `docker-compose.yml`:
+El archivo `docker-compose.yml` se usa para desarrollo local. El despliegue aislado
+del VPS esta definido en `docker-compose.prod.yml` y documentado paso a paso en
+`DEPLOYMENT.md`.
 
-- `db` en puerto `5432`
-- `backend` en puerto `8000`
-- `frontend` en puerto `3000`
+Servicios de desarrollo definidos en `docker-compose.yml`:
+
+- `db` en puerto `5434`
+- `backend` en puerto `8010`
+- `frontend` en puerto `3001`
 - `pgadmin` en puerto `5050`
 
 ### 6.1 Requisitos
@@ -278,7 +282,7 @@ POSTGRES_DB=scrapingweb
 PGADMIN_EMAIL=admin@local.com
 PGADMIN_PASSWORD=admin123
 
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=/api
 
 JWT_SECRET_KEY=change-this-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=120
@@ -299,8 +303,8 @@ docker compose up --build
 
 Accesos:
 
-- Frontend: http://localhost:3000
-- Backend docs: http://localhost:8000/docs
+- Frontend: http://localhost:3001
+- Backend docs: http://localhost:8010/docs
 - pgAdmin: http://localhost:5050
 
 ## 7. Ejecucion local sin Docker

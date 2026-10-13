@@ -159,9 +159,9 @@ def ensure_runtime_schema() -> None:
                 ),
                 {
                     "id": str(uuid4()),
-                    "username": "Admin",
-                    "email": "admin@hotelens.local",
-                    "password": hash_password("Admin123!"),
+                    "username": settings.INITIAL_ADMIN_NAME,
+                    "email": settings.INITIAL_ADMIN_EMAIL,
+                    "password": hash_password(settings.INITIAL_ADMIN_PASSWORD),
                     "role": "admin",
                 },
             )

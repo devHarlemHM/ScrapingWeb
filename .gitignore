@@ -1,4 +1,8 @@
 # Variables de entorno
+.env
+.env.*
+!.env.example
+!.env.production.example
 
 # Docker volumes
 postgres_data/

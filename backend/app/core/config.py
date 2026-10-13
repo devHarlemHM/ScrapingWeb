@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    INITIAL_ADMIN_NAME: str = "Admin"
+    INITIAL_ADMIN_EMAIL: str = "admin@hotelens.local"
+    INITIAL_ADMIN_PASSWORD: str = "Admin123!"
+
     @property
     def database_url(self) -> str:
         return (

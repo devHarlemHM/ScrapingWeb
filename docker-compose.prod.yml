@@ -1,19 +1,88 @@
+name: scrapingweb-production
+
 services:
   db:
+    image: postgres:16-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
 
   backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
     restart: unless-stopped
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]
+    init: true
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010", "--proxy-headers", "--forwarded-allow-ips=*"]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://scrapingweb.site:8095}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-120}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Admin}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:?INITIAL_ADMIN_EMAIL is required}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD is required}
+      SCRAPPING_SCHEDULE_DAY: ${SCRAPPING_SCHEDULE_DAY:-sun}
+      SCRAPPING_SCHEDULE_HOUR: ${SCRAPPING_SCHEDULE_HOUR:-22}
+      SCRAPPING_SCHEDULE_MINUTE: ${SCRAPPING_SCHEDULE_MINUTE:-0}
+      SCRAPPING_SCHEDULE_TIMEZONE: ${SCRAPPING_SCHEDULE_TIMEZONE:-America/Bogota}
+      SCRAPPING_RUN_ON_STARTUP: ${SCRAPPING_RUN_ON_STARTUP:-false}
+      SCRAPPING_SCRIPT_TIMEOUT_SECONDS: ${SCRAPPING_SCRIPT_TIMEOUT_SECONDS:-0}
+      PYTHONUNBUFFERED: "1"
     volumes:
-      - ./backend/exports:/app/exports
+      - exports_data:/app/exports
+    shm_size: "2gb"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - private
 
   frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api
     restart: unless-stopped
-    volumes: []
-
-  pgadmin:
-    restart: unless-stopped
-    profiles: ["admin"]
     ports:
-      - "127.0.0.1:5051:80"
+      - "${FRONTEND_PORT:-8095}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - private
+
+volumes:
+  postgres_data:
+  exports_data:
+
+networks:
+  private:
+    driver: bridge
